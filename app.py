@@ -1,16 +1,79 @@
 import os
-import edge_tts
+import sys
+import subprocess
+import platform
+import argparse
 import json
 import asyncio
-import whisper_timestamped as whisper
-from utility.script.script_generator import generate_script
-from utility.audio.audio_generator import generate_audio
-from utility.captions.timed_captions_generator import generate_timed_captions
-from utility.video.background_video_generator import generate_video_url
-from utility.render.render_engine import get_output_media
-from utility.video.video_search_query_generator import getVideoSearchQueriesTimed, merge_empty_intervals
-import argparse
-import sys
+
+# Function to check and install missing packages
+def check_and_install_dependencies():
+    required_packages = [
+        "edge_tts",
+        "whisper_timestamped",
+        "torch",
+        "numpy"
+    ]
+    
+    for package in required_packages:
+        try:
+            __import__(package)
+            print(f"✓ {package} is already installed.")
+        except ImportError:
+            print(f"Installing {package}...")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+                print(f"✓ Successfully installed {package}.")
+            except Exception as e:
+                print(f"✗ Failed to install {package}: {str(e)}")
+                if package == "edge_tts":
+                    print("Attempting alternative installation for edge-tts...")
+                    try:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "edge-tts"])
+                        print("✓ Successfully installed edge-tts with hyphen.")
+                    except Exception as e2:
+                        print(f"✗ Failed alternative installation: {str(e2)}")
+
+# Detect available hardware
+def detect_hardware():
+    hardware = {"cpu": True, "gpu": False, "tpu": False}
+    
+    # Check for GPU (CUDA) availability with PyTorch
+    try:
+        import torch
+        hardware["gpu"] = torch.cuda.is_available()
+        if hardware["gpu"]:
+            print(f"✓ GPU detected: {torch.cuda.get_device_name(0)}")
+            print(f"  CUDA Version: {torch.version.cuda}")
+    except Exception as e:
+        print(f"✗ Error checking GPU: {str(e)}")
+    
+    # Check for TPU availability (Google Colab TPU or other)
+    try:
+        if "COLAB_TPU_ADDR" in os.environ:
+            hardware["tpu"] = True
+            print("✓ TPU detected (Colab)")
+        elif os.path.exists("/usr/lib/libtpu.so"):
+            hardware["tpu"] = True
+            print("✓ TPU detected")
+    except Exception as e:
+        print(f"✗ Error checking TPU: {str(e)}")
+    
+    return hardware
+
+# Now import the remaining modules after dependency check
+def import_modules():
+    global edge_tts, whisper, generate_script, generate_audio, generate_timed_captions
+    global generate_video_url, get_output_media, getVideoSearchQueriesTimed, merge_empty_intervals
+    
+    import edge_tts
+    import whisper_timestamped as whisper
+    from utility.script.script_generator import generate_script
+    from utility.audio.audio_generator import generate_audio
+    from utility.captions.timed_captions_generator import generate_timed_captions
+    from utility.video.background_video_generator import generate_video_url
+    from utility.render.render_engine import get_output_media
+    from utility.video.video_search_query_generator import getVideoSearchQueriesTimed, merge_empty_intervals
 
 def read_script_file(file_path):
     """Read script from a file."""
@@ -28,11 +91,31 @@ def main():
     input_group.add_argument('--text', type=str, help='Direct text input for the script')
     input_group.add_argument('--file', type=str, help='Path to a text file containing the script')
     
+    # Add options for hardware selection
+    parser.add_argument('--force-cpu', action='store_true', help='Force CPU usage even if GPU is available')
+    parser.add_argument('--force-gpu', action='store_true', help='Force GPU usage (will error if not available)')
+    parser.add_argument('--force-tpu', action='store_true', help='Force TPU usage (will error if not available)')
+    
     try:
         args = parser.parse_args()
     except:
         # If there's a problem parsing arguments, print usage and exit
         parser.print_help()
+        sys.exit(1)
+    
+    # Detect available hardware
+    hardware = detect_hardware()
+    
+    # Handle hardware selection
+    if args.force_cpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+        os.environ["TPU_NAME"] = ""
+        print("Forcing CPU usage as requested.")
+    elif args.force_gpu and not hardware["gpu"]:
+        print("Error: GPU requested but not available.")
+        sys.exit(1)
+    elif args.force_tpu and not hardware["tpu"]:
+        print("Error: TPU requested but not available.")
         sys.exit(1)
     
     SAMPLE_FILE_NAME = "audio_tts.wav"
@@ -97,6 +180,14 @@ def main():
     return 0
 
 if __name__ == "__main__":
+    print("=== Text-To-Video-AI ===")
+    print(f"Python version: {platform.python_version()}")
+    print(f"System: {platform.system()} {platform.version()}")
+    print("Checking dependencies...")
+    
+    # Check and install missing dependencies
+    check_and_install_dependencies()
+    
     # Configure environment for audio
     try:
         # Windows-specific path adjustments
@@ -111,6 +202,9 @@ if __name__ == "__main__":
         os.makedirs(runtime_dir, mode=0o700, exist_ok=True)
     except Exception as e:
         print(f"Warning: Could not set up environment directories: {str(e)}")
+    
+    # Import modules now that dependencies are checked
+    import_modules()
     
     # Exit with the main function's return code
     sys.exit(main())
