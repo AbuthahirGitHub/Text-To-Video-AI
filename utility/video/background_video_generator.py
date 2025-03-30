@@ -29,7 +29,16 @@ GENERIC_FALLBACK_TERMS = [
     "planet"
 ]
 
-def search_videos(query_string, orientation_landscape=True):
+# Emergency fallback terms to use when everything else fails
+EMERGENCY_FALLBACK_TERMS = [
+    "background",
+    "texture",
+    "pattern",
+    "abstract",
+    "color"
+]
+
+def search_videos(query_string, orientation_landscape=True, ignore_orientation=False):
    
     url = "https://api.pexels.com/videos/search"
     headers = {
@@ -38,9 +47,12 @@ def search_videos(query_string, orientation_landscape=True):
     }
     params = {
         "query": query_string,
-        "orientation": "landscape" if orientation_landscape else "portrait",
         "per_page": 15
     }
+    
+    # Only specify orientation if we're not ignoring it
+    if not ignore_orientation:
+        params["orientation"] = "landscape" if orientation_landscape else "portrait"
 
     response = requests.get(url, headers=headers, params=params)
     json_data = response.json()
@@ -50,75 +62,117 @@ def search_videos(query_string, orientation_landscape=True):
 
 
 def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt=0):
-    # If we're on our fallback attempt, use a generic term instead
-    if attempt > 0:
-        # Select a random generic term that hasn't been used yet
+    # If we're on fallback attempts, use different strategies
+    if attempt == 1:
+        # First fallback: Use a generic term
         available_fallbacks = [term for term in GENERIC_FALLBACK_TERMS if term not in used_vids]
         if not available_fallbacks:
-            # If all fallbacks are used, reset and try again
             available_fallbacks = GENERIC_FALLBACK_TERMS
         
         query_string = random.choice(available_fallbacks)
         print(f"Using generic fallback video search: '{query_string}'")
+    elif attempt == 2:
+        # Second fallback: Use an emergency term
+        query_string = random.choice(EMERGENCY_FALLBACK_TERMS)
+        print(f"Using emergency fallback video search: '{query_string}'")
+    elif attempt == 3:
+        # Third fallback: Random with any orientation
+        # Just search for "video" to get anything
+        query_string = "video"
+        print("Searching for ANY video, ignoring orientation and quality requirements")
+        
+    # Determine if we should ignore orientation requirements for this attempt
+    ignore_orientation = (attempt >= 3)
     
     # Search for videos
     try:
-        vids = search_videos(query_string, orientation_landscape)
+        vids = search_videos(query_string, orientation_landscape, ignore_orientation)
         
         # Verify videos exist in the response
         if 'videos' not in vids or not vids['videos']:
-            if attempt == 0:
-                # Try with a generic term instead
-                return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
+            if attempt < 3:
+                # Try with next fallback level
+                return getBestVideo(query_string, orientation_landscape, used_vids, attempt=attempt+1)
             else:
-                print(f"No videos found for fallback term: {query_string}")
+                print(f"Exhausted all fallback options, no videos found for '{query_string}'")
                 return None
                 
         videos = vids['videos']  # Extract the videos list from JSON
 
-        # Filter and extract videos with width and height as 1920x1080 for landscape or 1080x1920 for portrait
+        # For last attempt, accept any video with reasonable dimensions
+        if attempt >= 3:
+            # Just get the first video with reasonable quality
+            for video in videos:
+                for video_file in video['video_files']:
+                    if video_file['width'] >= 640 and video_file['height'] >= 360:
+                        return video_file['link']
+        
+        # Filter and extract videos with appropriate dimensions
         if orientation_landscape:
             filtered_videos = [video for video in videos if video['width'] >= 1920 and video['height'] >= 1080 and video['width']/video['height'] == 16/9]
         else:
             filtered_videos = [video for video in videos if video['width'] >= 1080 and video['height'] >= 1920 and video['height']/video['width'] == 16/9]
 
+        # If no perfect matches but we're on attempt 2+, be more lenient with ratios
+        if not filtered_videos and attempt >= 2:
+            if orientation_landscape:
+                filtered_videos = [video for video in videos if video['width'] >= 1280 and video['height'] >= 720 and video['width'] > video['height']]
+            else:
+                filtered_videos = [video for video in videos if video['width'] >= 720 and video['height'] >= 1280 and video['height'] > video['width']]
+
         # Sort the filtered videos by duration in ascending order
         sorted_videos = sorted(filtered_videos, key=lambda x: abs(15-int(x['duration'])))
 
-        # Extract the top 3 videos' URLs
+        # Extract the videos' URLs
         for video in sorted_videos:
             for video_file in video['video_files']:
-                if orientation_landscape:
-                    if video_file['width'] == 1920 and video_file['height'] == 1080:
-                        if not (video_file['link'].split('.hd')[0] in used_vids):
-                            return video_file['link']
+                # Original strict criteria
+                if attempt < 2:
+                    if orientation_landscape:
+                        if video_file['width'] == 1920 and video_file['height'] == 1080:
+                            if not (video_file['link'].split('.hd')[0] in used_vids):
+                                return video_file['link']
+                    else:
+                        if video_file['width'] == 1080 and video_file['height'] == 1920:
+                            if not (video_file['link'].split('.hd')[0] in used_vids):
+                                return video_file['link']
+                # More lenient criteria for fallbacks
                 else:
-                    if video_file['width'] == 1080 and video_file['height'] == 1920:
-                        if not (video_file['link'].split('.hd')[0] in used_vids):
-                            return video_file['link']
+                    if orientation_landscape:
+                        if video_file['width'] >= 1280 and video_file['height'] >= 720 and video_file['width'] > video_file['height']:
+                            if not (video_file['link'].split('.hd')[0] in used_vids):
+                                return video_file['link']
+                    else:
+                        if video_file['width'] >= 720 and video_file['height'] >= 1280 and video_file['height'] > video_file['width']:
+                            if not (video_file['link'].split('.hd')[0] in used_vids):
+                                return video_file['link']
         
-        # If we didn't find any matching videos but haven't tried fallback yet, try a generic term
-        if attempt == 0:
-            print(f"No matching videos found for '{query_string}', trying generic fallback")
-            return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
+        # If we still didn't find any matching videos but haven't tried all fallbacks
+        if attempt < 3:
+            print(f"No matching videos found for '{query_string}', trying next fallback level")
+            return getBestVideo(query_string, orientation_landscape, used_vids, attempt=attempt+1)
         else:
-            print(f"No matching videos found for fallback term: {query_string}")
-            return None
+            # Last resort: just return any video file from the first video
+            if videos and len(videos) > 0 and 'video_files' in videos[0] and len(videos[0]['video_files']) > 0:
+                print(f"Using last resort video with non-ideal dimensions")
+                return videos[0]['video_files'][0]['link']
+            else:
+                print("Completely failed to find any usable video")
+                return None
             
     except Exception as e:
         print(f"Error searching for videos: {str(e)}")
-        if attempt == 0:
-            # Try with a generic term instead
-            return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
+        if attempt < 3:
+            # Try with next fallback level
+            return getBestVideo(query_string, orientation_landscape, used_vids, attempt=attempt+1)
         else:
             return None
-            
-    print("NO LINKS found for this round of search with query :", query_string)
     
-    # If we get here and haven't tried fallback yet, try with a generic term
-    if attempt == 0:
-        return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
+    # If we get here, try next fallback level
+    if attempt < 3:
+        return getBestVideo(query_string, orientation_landscape, used_vids, attempt=attempt+1)
     
+    print("Exhausted all options, no videos found")
     return None
 
 
@@ -140,7 +194,7 @@ def generate_video_url(timed_video_searches, video_server):
             
             # If no video was found, try a random generic term
             if not url:
-                print("No specific videos found, using random generic video")
+                print("No specific videos found, using fallback video")
                 # Get a random term we haven't used yet
                 available_terms = [term for term in GENERIC_FALLBACK_TERMS if term not in used_fallback_terms]
                 if not available_terms:
@@ -155,6 +209,13 @@ def generate_video_url(timed_video_searches, video_server):
                 if url:
                     used_links.append(url.split('.hd')[0])
                     print(f"Using fallback video for '{fallback_term}'")
+            
+            # If STILL no video, we'll have tried all fallback mechanisms in getBestVideo,
+            # including emergency terms and even "anything with decent dimensions"
+            if not url:
+                print("WARNING: Using default placeholder video URL - all fallbacks failed")
+                # Hardcoded fallback to a reliable Pexels video as absolute last resort
+                url = "https://player.vimeo.com/external/368320203.hd.mp4?s=050513f8c83b9e5552132ca0497fce60b0a9af48&profile_id=175&oauth2_token_id=57447761"
             
             timed_video_urls.append([[t1, t2], url])
             
