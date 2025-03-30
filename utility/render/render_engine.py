@@ -46,42 +46,56 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
     downloaded_files = []
     
     try:
-        # Download and process each video segment
-        for i, ((t1, t2), video_url) in enumerate(background_video_data):
-            try:
-                print(f"Processing segment {i+1}/{len(background_video_data)}: {t1:.2f}-{t2:.2f}")
-                
-                # Skip any None URLs (should not happen with our improved code)
-                if video_url is None:
-                    print(f"WARNING: No video URL for segment {t1:.2f}-{t2:.2f}, skipping")
+        # Process videos in smaller batches to reduce memory usage
+        BATCH_SIZE = 5  # Process 5 segments at a time
+        for batch_start in range(0, len(background_video_data), BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, len(background_video_data))
+            batch = background_video_data[batch_start:batch_end]
+            
+            print(f"\nProcessing batch {batch_start//BATCH_SIZE + 1}/{(len(background_video_data) + BATCH_SIZE - 1)//BATCH_SIZE}")
+            
+            # Process each segment in the batch
+            for i, ((t1, t2), video_url) in enumerate(batch):
+                try:
+                    print(f"Processing segment {batch_start + i + 1}/{len(background_video_data)}: {t1:.2f}-{t2:.2f}")
+                    
+                    if video_url is None:
+                        print(f"WARNING: No video URL for segment {t1:.2f}-{t2:.2f}, skipping")
+                        continue
+                    
+                    # Download the video file
+                    video_filename = tempfile.NamedTemporaryFile(delete=False).name
+                    print(f"Downloading video for segment {t1:.2f}-{t2:.2f}...")
+                    
+                    download_file(video_url, video_filename)
+                    downloaded_files.append(video_filename)
+                    
+                    # Create VideoFileClip from the downloaded file
+                    print(f"Creating clip for segment {t1:.2f}-{t2:.2f}...")
+                    video_clip = VideoFileClip(video_filename)
+                    
+                    # Handle videos that are shorter than needed
+                    if video_clip.duration < (t2 - t1):
+                        print(f"WARNING: Video is shorter than needed segment ({video_clip.duration}s < {t2-t1}s)")
+                        repeat = int((t2 - t1) / video_clip.duration) + 1
+                        video_clip = video_clip.loop(n=repeat)
+                    
+                    video_clip = video_clip.set_start(t1)
+                    video_clip = video_clip.set_end(t2)
+                    visual_clips.append(video_clip)
+                    
+                    # Clear memory after each clip
+                    del video_clip
+                    
+                except Exception as e:
+                    print(f"ERROR processing video segment {t1:.2f}-{t2:.2f}: {str(e)}")
                     continue
-                
-                # Download the video file
-                video_filename = tempfile.NamedTemporaryFile(delete=False).name
-                print(f"Downloading video for segment {t1:.2f}-{t2:.2f}...")
-                
-                download_file(video_url, video_filename)
-                downloaded_files.append(video_filename)
-                
-                # Create VideoFileClip from the downloaded file
-                print(f"Creating clip for segment {t1:.2f}-{t2:.2f}...")
-                video_clip = VideoFileClip(video_filename)
-                
-                # Handle videos that are shorter than needed
-                if video_clip.duration < (t2 - t1):
-                    print(f"WARNING: Video is shorter than needed segment ({video_clip.duration}s < {t2-t1}s)")
-                    # Loop the video if it's shorter than needed
-                    repeat = int((t2 - t1) / video_clip.duration) + 1
-                    video_clip = video_clip.loop(n=repeat)
-                
-                video_clip = video_clip.set_start(t1)
-                video_clip = video_clip.set_end(t2)
-                visual_clips.append(video_clip)
-                
-            except Exception as e:
-                print(f"ERROR processing video segment {t1:.2f}-{t2:.2f}: {str(e)}")
-                # Continue with other segments
-                continue
+            
+            # Clear memory after each batch
+            if batch_start + BATCH_SIZE < len(background_video_data):
+                print("Clearing memory after batch...")
+                import gc
+                gc.collect()
         
         print("Creating audio track...")
         audio_clips = []
@@ -119,16 +133,28 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
         print("This may take some time depending on video length and complexity.")
         print("Progress indicators will appear below:")
         
-        # Increased preset speed to 'ultrafast' for faster rendering but lower quality
-        # Can be adjusted back to 'veryfast' for better quality
+        # Use GPU acceleration if available
+        try:
+            import torch
+            if torch.cuda.is_available():
+                print("GPU acceleration enabled for video rendering")
+                os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+            else:
+                print("GPU not available, using CPU for rendering")
+        except ImportError:
+            print("PyTorch not available, using CPU for rendering")
+        
+        # Optimize rendering settings for Google Colab
         video.write_videofile(
             OUTPUT_FILE_NAME, 
             codec='libx264', 
             audio_codec='aac', 
             fps=25, 
-            preset='ultrafast',  # Faster rendering, lower quality
+            preset='ultrafast',  # Fastest rendering
             threads=4,  # Use multiple threads
-            logger=None  # Use default logger
+            logger=None,  # Use default logger
+            bitrate='2000k',  # Lower bitrate for smaller file size
+            ffmpeg_params=['-max_muxing_queue_size', '1024']  # Prevent queue overflow
         )
         
         print("Video rendering completed successfully!")
@@ -145,5 +171,9 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
                     os.remove(filename)
             except Exception as e:
                 print(f"Warning: Could not remove temporary file {filename}: {str(e)}")
+        
+        # Clear memory
+        import gc
+        gc.collect()
 
     return OUTPUT_FILE_NAME

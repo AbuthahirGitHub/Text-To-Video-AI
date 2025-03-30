@@ -133,6 +133,14 @@ def read_script_file(file_path):
 def main():
     parser = argparse.ArgumentParser(description="Generate a video from a script.")
     
+    # Check if running in Google Colab
+    is_colab = 'COLAB_GPU' in os.environ
+    if is_colab:
+        print("Running in Google Colab environment")
+        # Set up Colab-specific optimizations
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Use GPU if available
+        os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'  # Allow GPU memory growth
+    
     # Require exactly one of these arguments
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument('--text', type=str, help='Direct text input for the script')
@@ -216,6 +224,10 @@ def main():
         if background_video_urls is not None:
             print("\nRendering final video...")
             try:
+                # Clear memory before rendering
+                import gc
+                gc.collect()
+                
                 output_path = get_output_media(SAMPLE_FILE_NAME, timed_captions, background_video_urls, VIDEO_SERVER)
                 if output_path:
                     print(f"\nVideo generated successfully: {OUTPUT_VIDEO_NAME}")
