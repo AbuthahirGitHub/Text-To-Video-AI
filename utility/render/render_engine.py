@@ -20,14 +20,14 @@ else:
 
 def download_file(url, filename):
     try:
-    with open(filename, 'wb') as f:
-        headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
+        with open(filename, 'wb') as f:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()  # Raise an error for bad status codes
-        f.write(response.content)
-        return True
+            f.write(response.content)
+            return True
     except Exception as e:
         print(f"ERROR downloading video: {str(e)}")
         return False
@@ -77,8 +77,8 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
                         print(f"WARNING: No video URL for segment {t1:.2f}-{t2:.2f}, skipping")
                         continue
                     
-        # Download the video file
-        video_filename = tempfile.NamedTemporaryFile(delete=False).name
+                    # Download the video file
+                    video_filename = tempfile.NamedTemporaryFile(delete=False).name
                     print(f"Downloading video for segment {t1:.2f}-{t2:.2f}...")
                     
                     if not download_file(video_url, video_filename):
@@ -92,10 +92,10 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
                         print(f"ERROR: Invalid video file for segment {t1:.2f}-{t2:.2f}, skipping")
                         continue
         
-        # Create VideoFileClip from the downloaded file
+                    # Create VideoFileClip from the downloaded file
                     print(f"Creating clip for segment {t1:.2f}-{t2:.2f}...")
                     try:
-        video_clip = VideoFileClip(video_filename)
+                        video_clip = VideoFileClip(video_filename)
                         
                         # Validate video clip
                         if video_clip is None or video_clip.size is None:
@@ -108,9 +108,9 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
                             repeat = int((t2 - t1) / video_clip.duration) + 1
                             video_clip = video_clip.loop(n=repeat)
                         
-        video_clip = video_clip.set_start(t1)
-        video_clip = video_clip.set_end(t2)
-        visual_clips.append(video_clip)
+                        video_clip = video_clip.set_start(t1)
+                        video_clip = video_clip.set_end(t2)
+                        visual_clips.append(video_clip)
     
                         # Clear memory after each clip
                         del video_clip
@@ -130,20 +130,20 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
                 gc.collect()
         
         print("Creating audio track...")
-    audio_clips = []
-    audio_file_clip = AudioFileClip(audio_file_path)
-    audio_clips.append(audio_file_clip)
+        audio_clips = []
+        audio_file_clip = AudioFileClip(audio_file_path)
+        audio_clips.append(audio_file_clip)
 
         print("Adding captions...")
         for i, ((t1, t2), text) in enumerate(timed_captions):
             try:
                 if i % 10 == 0:  # Print progress every 10 captions
                     print(f"Processing caption {i+1}/{len(timed_captions)}...")
-        text_clip = TextClip(txt=text, fontsize=100, color="white", stroke_width=3, stroke_color="black", method="label")
-        text_clip = text_clip.set_start(t1)
-        text_clip = text_clip.set_end(t2)
-        text_clip = text_clip.set_position(["center", 800])
-        visual_clips.append(text_clip)
+                text_clip = TextClip(txt=text, fontsize=100, color="white", stroke_width=3, stroke_color="black", method="label")
+                text_clip = text_clip.set_start(t1)
+                text_clip = text_clip.set_end(t2)
+                text_clip = text_clip.set_position(["center", 800])
+                visual_clips.append(text_clip)
             except Exception as e:
                 print(f"ERROR processing caption at {t1:.2f}-{t2:.2f}: {str(e)}")
                 continue
@@ -153,13 +153,13 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
             return None
             
         print("Compositing video clips...")
-    video = CompositeVideoClip(visual_clips)
-    
-    if audio_clips:
+        video = CompositeVideoClip(visual_clips)
+        
+        if audio_clips:
             print("Adding audio to video...")
-        audio = CompositeAudioClip(audio_clips)
-        video.duration = audio.duration
-        video.audio = audio
+            audio = CompositeAudioClip(audio_clips)
+            video.duration = audio.duration
+            video.audio = audio
 
         print(f"Rendering final video to {OUTPUT_FILE_NAME}...")
         print("This may take some time depending on video length and complexity.")
@@ -194,7 +194,7 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
         print(f"CRITICAL ERROR during video rendering: {str(e)}")
         return None
     finally:
-    # Clean up downloaded files
+        # Clean up downloaded files
         print("Cleaning up temporary files...")
         for filename in downloaded_files:
             try:
