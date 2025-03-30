@@ -1,0 +1,43 @@
+[33mcommit 9b15dd1a5142844cc175b653c210557ed406e04a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: AbuthahirGitHub <abuthahir.dataset+github@gmail.com>
+Date:   Sun Mar 30 21:25:18 2025 +0530
+
+    video rendering ctrlc found problem getting app.py issue v8
+
+M	utility/render/render_engine.py
+M	utility/video/background_video_generator.py
+
+[33mcommit c4e75feea9516dcd6e84a26d86a63c17654f8149[m
+Author: AbuthahirGitHub <abuthahir.dataset+github@gmail.com>
+Date:   Sun Mar 30 21:20:20 2025 +0530
+
+    video rendering ctrlc found problem getting app.py issue v7
+
+M	utility/video/background_video_generator.py
+
+[33mcommit 9c73ccd5df996f940f3e08e8e97ccd5384b807f1[m
+Author: AbuthahirGitHub <abuthahir.dataset+github@gmail.com>
+Date:   Sun Mar 30 21:17:19 2025 +0530
+
+    video rendering ctrlc found problem getting app.py issue v6
+
+M	app.py
+
+[33mcommit 50102e7a36ea53c29c6a073de1fef014efb1c55c[m
+Author: AbuthahirGitHub <abuthahir.dataset+github@gmail.com>
+Date:   Sun Mar 30 21:09:50 2025 +0530
+
+    video rendering ctrlc found problem getting app.py issue v5
+
+M	app.py
+M	utility/render/render_engine.py
+M	utility/video/background_video_generator.py
+
+[33mcommit ec952fc4e77af15f37745627cb58f7e7335c4996[m
+Author: AbuthahirGitHub <abuthahir.dataset+github@gmail.com>
+Date:   Sun Mar 30 20:56:19 2025 +0530
+
+    video rendering ctrlc found problem getting app.py issue v4
+
+M	requirements.txt
+M	utility/captions/timed_captions_generator.py

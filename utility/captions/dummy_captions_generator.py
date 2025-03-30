@@ -2,7 +2,7 @@
 Dummy captions generator for environments where audio processing fails.
 """
 
-def generate_dummy_captions(script, audio_file, duration=10.0):
+def generate_dummy_captions(script, audio_file, duration=30.0):
     """
     Generate dummy timed captions from a script when audio processing fails.
     

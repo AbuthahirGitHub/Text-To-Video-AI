@@ -4,6 +4,7 @@ import re
 import os
 import numpy as np
 import soundfile as sf
+from .dummy_captions_generator import generate_dummy_captions
 
 def validate_audio_file(audio_filename):
     """Validate that the audio file exists and is readable"""
@@ -37,14 +38,27 @@ def generate_timed_captions(audio_filename, model_size="base"):
         )
         
         if not gen or 'segments' not in gen:
-            raise ValueError("No transcription results returned")
+            print("No transcription results returned, falling back to dummy captions")
+            return generate_dummy_captions("", audio_filename, duration=30.0)
             
         print("Processing transcription...")
         return getCaptionsWithTime(gen)
         
     except Exception as e:
         print(f"ERROR in caption generation: {str(e)}")
-        raise
+        print("Falling back to dummy captions...")
+        try:
+            # Try to read the script from the audio filename (assuming it's in the same directory)
+            script_file = os.path.splitext(audio_filename)[0] + ".txt"
+            if os.path.exists(script_file):
+                with open(script_file, 'r', encoding='utf-8') as f:
+                    script = f.read()
+            else:
+                script = "No script available. Using placeholder captions."
+            return generate_dummy_captions(script, audio_filename, duration=30.0)
+        except Exception as dummy_error:
+            print(f"Error generating dummy captions: {str(dummy_error)}")
+            return generate_dummy_captions("", audio_filename, duration=30.0)
 
 def splitWordsBySize(words, maxCaptionSize):
    
