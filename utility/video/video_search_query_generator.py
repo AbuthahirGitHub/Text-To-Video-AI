@@ -1,90 +1,115 @@
+import os
 import json
 import re
-import os
 from datetime import datetime
 
-def fix_json(json_str):
-    """Fix common JSON formatting issues."""
-    # Replace typographical apostrophes with straight quotes
-    json_str = json_str.replace("'", "'")
-    # Replace any incorrect quotes (e.g., mixed single and double quotes)
-    json_str = json_str.replace(""", "\"").replace(""", "\"").replace("'", "\"").replace("'", "\"")
-    # Add escaping for quotes within the strings
-    json_str = json_str.replace('"you didn"t"', '"you didn\'t"')
-    return json_str
-
-def extract_keywords_from_sentence(sentence):
-    """Extract keywords from a sentence."""
-    # Strip punctuation and convert to lowercase
-    clean_sentence = re.sub(r'[^\w\s]', '', sentence.lower())
+def extract_keywords(text, captions):
+    """
+    Extract simple keywords from script text without using AI.
     
-    # Split into words
-    words = clean_sentence.split()
+    Args:
+        text (str): The script text
+        captions (list): Timed captions
+        
+    Returns:
+        list: A list of time-based keywords
+    """
+    # Extract basic keywords from the captions
+    keywords = []
     
-    # Remove common stop words
-    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 
-                 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'about', 'like', 'through', 'over', 'before', 
-                 'after', 'between', 'under', 'during', 'since', 'without', 'of', 'have', 'has', 'had', 
-                 'do', 'does', 'did', 'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must'}
+    # Common boring words to exclude
+    stop_words = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 
+        'of', 'in', 'to', 'for', 'with', 'by', 'at', 'from', 'about', 
+        'as', 'that', 'this', 'these', 'those', 'it', 'its'
+    }
     
-    filtered_words = [word for word in words if word not in stop_words and len(word) > 2]
+    # Go through each caption
+    for i, caption in enumerate(captions):
+        time_range, text = caption
+        
+        # Simple keyword extraction: split by spaces and remove stop words
+        words = [word.lower() for word in re.findall(r'\b\w+\b', text)]
+        filtered_words = [w for w in words if w not in stop_words and len(w) > 3]
+        
+        # Get up to 3 keywords for this segment
+        segment_keywords = filtered_words[:3]
+        
+        if segment_keywords:
+            # Add some visualization keywords
+            if 'space' in segment_keywords or 'universe' in segment_keywords:
+                segment_keywords = ['space', 'stars', 'galaxy']
+            elif 'animal' in segment_keywords or 'animals' in segment_keywords:
+                segment_keywords = ['animals', 'wildlife', 'nature']
+            elif 'ocean' in segment_keywords or 'sea' in segment_keywords:
+                segment_keywords = ['ocean', 'waves', 'underwater']
+                
+            # Add this segment with timing and keywords
+            keywords.append([time_range, segment_keywords])
     
-    # Find significant words (nouns and adjectives are most visual)
-    significant_words = []
+    # If no keywords were extracted, use some defaults
+    if not keywords:
+        end_time = 10.0
+        if captions and captions[-1][0][1]:
+            end_time = captions[-1][0][1]
+            
+        keywords = [
+            [[0, end_time/3], ["nature", "landscape", "scenery"]],
+            [[end_time/3, 2*end_time/3], ["timelapse", "sunset", "mountains"]],
+            [[2*end_time/3, end_time], ["water", "ocean", "waves"]]
+        ]
     
-    # Try to extract up to 3 significant keywords
-    if len(filtered_words) >= 3:
-        significant_words = filtered_words[:3]
-    elif len(filtered_words) > 0:
-        significant_words = filtered_words
-    else:
-        # Fallback if no significant words found
-        significant_words = ["scenic", "landscape", "nature"]
-    
-    # If we have single words, try to combine them into meaningful phrases
-    if len(significant_words) == 1:
-        return [f"{significant_words[0]} scene", f"beautiful {significant_words[0]}", f"{significant_words[0]} view"]
-    elif len(significant_words) == 2:
-        return [f"{significant_words[0]} {significant_words[1]}", f"{significant_words[1]} {significant_words[0]}", f"beautiful {significant_words[0]}"]
-    else:
-        return [f"{significant_words[0]} {significant_words[1]}", f"{significant_words[1]} {significant_words[2]}", f"{significant_words[0]} {significant_words[2]}"]
+    return keywords
 
 def getVideoSearchQueriesTimed(script, captions_timed):
     """
-    Generate video search queries from timed captions without using AI.
+    Get video search queries based on time segments without using AI.
+    
+    Args:
+        script (str): The script text
+        captions_timed (list): List of timed captions
+        
+    Returns:
+        list: A list of time-based keywords for video search
     """
     # Check if we have captions to process
     if not captions_timed or len(captions_timed) == 0:
         print("Warning: No timed captions available to generate video search queries")
-        return None
+        
+        # Create dummy captions if none provided
+        if script:
+            import re
+            sentences = re.split(r'(?<=[.!?])\s+', script)
+            sentences = [s.strip() for s in sentences if s.strip()]
+            
+            # Create simple timed captions (3 seconds per sentence)
+            captions_timed = []
+            current_time = 0
+            for sentence in sentences:
+                captions_timed.append([[current_time, current_time + 3], sentence])
+                current_time += 3
+                
+            if not captions_timed:
+                return None
+        else:
+            return None
     
     try:
-        search_terms = []
-        
-        for caption in captions_timed:
-            time_range = caption[0]  # [start_time, end_time]
-            text = caption[1]        # caption text
-            
-            # Extract keywords from each caption
-            keywords = extract_keywords_from_sentence(text)
-            
-            # Add to search terms
-            search_terms.append([time_range, keywords])
-        
+        # Extract keywords without AI
+        search_terms = extract_keywords(script, captions_timed)
         return search_terms
-            
     except Exception as e:
-        print(f"Error in video search query generation: {str(e)}")
+        print(f"Error in video search query generation: {e}")
         
-        # Create a basic fallback with generic terms
-        if captions_timed:
-            end_time = captions_timed[-1][0][1]
-            return [[[0, end_time], ["nature", "landscape", "scenery"]]]
+        # Fallback to basic keywords
+        if captions_timed and len(captions_timed) > 0:
+            end = captions_timed[-1][0][1]
+            return [[[0, end], ["nature", "landscape", "scenery"]]]
    
     return None
 
 def merge_empty_intervals(segments):
-    """Merge segments with empty URLs."""
+    """Merge intervals with empty content."""
     if not segments:
         return None
         
@@ -113,4 +138,4 @@ def merge_empty_intervals(segments):
             merged.append([interval, url])
             i += 1
     
-    return merged
+    return merged 

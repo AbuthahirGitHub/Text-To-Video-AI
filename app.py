@@ -62,9 +62,9 @@ def detect_hardware():
     
     return hardware
 
-# Now import the remaining modules after dependency check
+# Import modules with proper error handling
 def import_modules():
-    global edge_tts, whisper, generate_audio, generate_timed_captions
+    global edge_tts, whisper, generate_script, generate_audio, generate_timed_captions
     global generate_video_url, get_output_media, getVideoSearchQueriesTimed, merge_empty_intervals
     
     modules_imported = True
@@ -85,6 +85,12 @@ def import_modules():
         modules_imported = False
     
     try:
+        from utility.script.script_generator import generate_script
+    except ImportError as e:
+        print(f"WARNING: Could not import script_generator: {str(e)}")
+        modules_imported = False
+    
+    try:
         from utility.audio.audio_generator import generate_audio
     except ImportError as e:
         print(f"WARNING: Could not import audio_generator: {str(e)}")
@@ -94,12 +100,7 @@ def import_modules():
         from utility.captions.timed_captions_generator import generate_timed_captions
     except ImportError as e:
         print(f"WARNING: Could not import timed_captions_generator: {str(e)}")
-        try:
-            # Try to import the dummy captions generator instead
-            from utility.captions.dummy_captions_generator import generate_timed_captions
-            print("Using dummy captions generator as fallback")
-        except ImportError:
-            modules_imported = False
+        modules_imported = False
     
     try:
         from utility.video.background_video_generator import generate_video_url
@@ -169,8 +170,11 @@ def main():
     OUTPUT_VIDEO_NAME = "final_video.mp4"
 
     try:
-        # Get script content directly from text or file
-        script = read_script_file(args.file) if args.file else args.text
+        # Get script content either from direct text or file
+        script_content = read_script_file(args.file) if args.file else args.text
+        
+        # Process the input script (no AI generation, just pass through)
+        script = generate_script(script_content)
         print("Script to be used:")
         print(script)
         print("\nGenerating audio...")

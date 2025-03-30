@@ -38,7 +38,7 @@ def setup_colab_no_audio():
     # Install Python dependencies
     print("\n[3/5] Installing Python dependencies...")
     try:
-        # Skip audio dependencies
+        # Install core dependencies (removed AI dependencies)
         packages = ["pip", "moviepy", "pillow", "numpy", "requests"]
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade"] + packages)
         print("✓ Successfully installed core Python dependencies.")
