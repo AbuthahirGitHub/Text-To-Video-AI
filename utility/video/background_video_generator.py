@@ -42,7 +42,7 @@ GENERIC_FALLBACK_TERMS = [
 VIDEO_SEARCH_CACHE = {}
 
 def search_videos(query_string, orientation_landscape=True):
-    """Search for videos using the Pexels API with proper error handling."""
+    """Search for videos using the Pexels API with improved search quality."""
     # Check cache first
     cache_key = f"{query_string}_{orientation_landscape}"
     if cache_key in VIDEO_SEARCH_CACHE:
@@ -56,6 +56,20 @@ def search_videos(query_string, orientation_landscape=True):
     if not PEXELS_API_KEY:
         print(f"No Pexels API key provided. Cannot search for '{query_string}'")
         return empty_response
+    
+    # Clean and improve the search query
+    query_string = query_string.strip().lower()
+    
+    # Remove common words that might dilute the search
+    common_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+    query_words = [word for word in query_string.split() if word not in common_words]
+    
+    # If query is too short, add context
+    if len(query_words) < 2:
+        query_string = f"{query_string} background"
+    
+    # Add quality indicators
+    query_string = f"{query_string} 4k hd"
    
     url = "https://api.pexels.com/videos/search"
     headers = {
@@ -70,81 +84,69 @@ def search_videos(query_string, orientation_landscape=True):
         "size": "large"
     }
 
-    max_retries = 3
-    retry_delay = 2
-
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(url, headers=headers, params=params, timeout=10)
-            
-            if response.status_code == 401:
-                print(f"ERROR: Unauthorized - Invalid Pexels API key")
-                return empty_response
-            elif response.status_code == 429:
-                if attempt < max_retries - 1:
-                    print(f"Rate limit hit, waiting {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                print(f"ERROR: Rate limit exceeded after {max_retries} attempts")
-                return empty_response
-            elif response.status_code != 200:
-                print(f"ERROR: Pexels API returned status code {response.status_code}")
-                return empty_response
-
-            data = response.json()
-            
-            if 'videos' not in data:
-                print(f"ERROR: Invalid response format from Pexels API")
-                return empty_response
-                
-            # Cache successful response
-            VIDEO_SEARCH_CACHE[cache_key] = data
-            
-            # Log response for debugging
-            log_response(LOG_TYPE_PEXEL, query_string, data)
-            
-            # Print video count and resolutions
-            videos = data.get('videos', [])
-            if videos:
-                resolutions = {}
-                for video in videos:
-                    for file in video.get('video_files', []):
-                        res = f"{file.get('width', '?')}x{file.get('height', '?')}"
-                        resolutions[res] = resolutions.get(res, 0) + 1
-                print(f"Found {len(videos)} videos for '{query_string}'")
-                print(f"Available resolutions: {resolutions}")
-            else:
-                print(f"No videos found for '{query_string}'")
-            
-            return data
-
-        except requests.exceptions.RequestException as e:
-            if attempt < max_retries - 1:
-                print(f"Request failed, retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            print(f"ERROR: Failed to connect to Pexels API after {max_retries} attempts: {str(e)}")
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 401:
+            print(f"ERROR: Unauthorized - Invalid Pexels API key")
+            return empty_response
+        elif response.status_code != 200:
+            print(f"ERROR: Pexels API returned status code {response.status_code}")
             return empty_response
 
-    return empty_response
+        data = response.json()
+        
+        if 'videos' not in data:
+            print(f"ERROR: Invalid response format from Pexels API")
+            return empty_response
+            
+        # Cache successful response
+        VIDEO_SEARCH_CACHE[cache_key] = data
+        
+        # Log response for debugging
+        log_response(LOG_TYPE_PEXEL, query_string, data)
+        
+        # Print video count and resolutions
+        videos = data.get('videos', [])
+        if videos:
+            resolutions = {}
+            for video in videos:
+                for file in video.get('video_files', []):
+                    res = f"{file.get('width', '?')}x{file.get('height', '?')}"
+                    resolutions[res] = resolutions.get(res, 0) + 1
+            print(f"Found {len(videos)} videos for '{query_string}'")
+            print(f"Available resolutions: {resolutions}")
+        else:
+            # Try a more generic search if no results found
+            print(f"No videos found for '{query_string}', trying more generic search...")
+            params['query'] = query_string.split()[0]  # Use first word only
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                videos = data.get('videos', [])
+                if videos:
+                    print(f"Found {len(videos)} videos with generic search")
+                    return data
+        
+        return data
+
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR: Failed to connect to Pexels API: {str(e)}")
+        return empty_response
 
 
 def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt=0):
-    """
-    Get the best video for a search term, without using generic fallback terms.
-    """
-    # Search for videos
+    """Get the best video for a search term with improved search quality."""
     try:
-    vids = search_videos(query_string, orientation_landscape)
+        # Search for videos
+        vids = search_videos(query_string, orientation_landscape)
         
         # Verify videos exist in the response
         if 'videos' not in vids or not vids['videos']:
             print(f"No videos found for '{query_string}'")
             return None
-                
-    videos = vids['videos']  # Extract the videos list from JSON
+            
+        videos = vids['videos']
 
         # Print detailed diagnostics about available videos
         if videos:
@@ -164,65 +166,36 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt
         # Try exact resolution match first (1920x1080)
         filtered_videos = []
         for video in videos:
-            if orientation_landscape:
-                if video.get('width', 0) == 1920 and video.get('height', 0) == 1080:
-                    filtered_videos.append(video)
-            else:
-                if video.get('width', 0) == 1080 and video.get('height', 0) == 1920:
-                    filtered_videos.append(video)
+            for file in video.get('video_files', []):
+                if file.get('width') == 1920 and file.get('height') == 1080:
+                    filtered_videos.append(file)
         
-        # If no exact matches, try approximate matches with flexible aspect ratio
+        # If no exact matches, try approximate matches
         if not filtered_videos:
             print(f"No exact resolution matches for '{query_string}', trying flexible matching")
             for video in videos:
-                if orientation_landscape:
-                    # More flexible landscape criteria
-                    width = video.get('width', 0)
-                    height = video.get('height', 0)
-                    if width >= 1280 and height >= 720 and width > height:
-                        filtered_videos.append(video)
-                else:
-                    # More flexible portrait criteria
-                    width = video.get('width', 0)
-                    height = video.get('height', 0)
-                    if width >= 720 and height >= 1280 and height > width:
-                        filtered_videos.append(video)
+                for file in video.get('video_files', []):
+                    width = file.get('width', 0)
+                    height = file.get('height', 0)
+                    if width >= 1280 and height >= 720:
+                        filtered_videos.append(file)
         
         # If still no matches, take any video
         if not filtered_videos and videos:
             print(f"No resolution matches for '{query_string}', using any available video")
-            filtered_videos = videos
+            for video in videos:
+                filtered_videos.extend(video.get('video_files', []))
         
-        # Sort the filtered videos by duration in ascending order
-        sorted_videos = sorted(filtered_videos, key=lambda x: abs(15-int(x.get('duration', 15))))
+        # Sort by quality (width * height)
+        filtered_videos.sort(key=lambda x: (x.get('width', 0) * x.get('height', 0)), reverse=True)
         
-        # Extract any usable video URL
-        for video in sorted_videos:
-            best_file = None
-            best_quality = 0
-            
-            # Find the best quality file for this video
-            for video_file in video.get('video_files', []):
-                width = video_file.get('width', 0)
-                height = video_file.get('height', 0)
-                quality = width * height
-                
-                # Skip files we've already used
-                if video_file.get('link', '').split('.hd')[0] in used_vids:
-                    continue
-                    
-                # Find highest quality
-                if quality > best_quality:
-                    best_quality = quality
-                    best_file = video_file
-            
-            # Use the best file if found
-            if best_file and 'link' in best_file:
-                return best_file['link']
+        # Find the best quality file that hasn't been used
+        for file in filtered_videos:
+            if file.get('link', '').split('.hd')[0] not in used_vids:
+                return file.get('link')
         
-        # If we get here, we couldn't find a usable video for this term
         print(f"No usable videos found for '{query_string}'")
-    return None
+        return None
             
     except Exception as e:
         print(f"Error searching for videos: {str(e)}")
