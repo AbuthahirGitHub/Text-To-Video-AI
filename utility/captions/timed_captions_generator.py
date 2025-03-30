@@ -21,34 +21,51 @@ def validate_audio_file(audio_filename):
         raise ValueError(f"Invalid audio file: {str(e)}")
 
 def generate_timed_captions(audio_filename, model_size="base"):
+    """Generate timed captions from audio file with robust error handling"""
     try:
         # Validate audio file first
         validate_audio_file(audio_filename)
         
-        print(f"Loading Whisper model ({model_size})...")
-        WHISPER_MODEL = load_model(model_size)
+        # Try to load the Whisper model
+        try:
+            print(f"Loading Whisper model ({model_size})...")
+            WHISPER_MODEL = load_model(model_size)
+        except Exception as model_error:
+            print(f"Failed to load Whisper model: {str(model_error)}")
+            return generate_dummy_captions("", audio_filename, duration=30.0)
         
-        print("Transcribing audio...")
-        gen = transcribe_timestamped(
-            WHISPER_MODEL, 
-            audio_filename, 
-            verbose=True,  # Enable verbose output for debugging
-            fp16=False,    # Disable fp16 for better stability
-            language="en"  # Force English language
-        )
+        # Try to transcribe the audio
+        try:
+            print("Transcribing audio...")
+            gen = transcribe_timestamped(
+                WHISPER_MODEL, 
+                audio_filename, 
+                verbose=True,
+                fp16=False,
+                language="en"
+            )
+        except Exception as transcribe_error:
+            print(f"Failed to transcribe audio: {str(transcribe_error)}")
+            return generate_dummy_captions("", audio_filename, duration=30.0)
         
-        if not gen or 'segments' not in gen:
-            print("No transcription results returned, falling back to dummy captions")
+        # Validate transcription results
+        if not gen or not isinstance(gen, dict) or 'segments' not in gen:
+            print("Invalid transcription results, falling back to dummy captions")
+            return generate_dummy_captions("", audio_filename, duration=30.0)
+        
+        # Process the transcription
+        try:
+            print("Processing transcription...")
+            return getCaptionsWithTime(gen)
+        except Exception as process_error:
+            print(f"Failed to process transcription: {str(process_error)}")
             return generate_dummy_captions("", audio_filename, duration=30.0)
             
-        print("Processing transcription...")
-        return getCaptionsWithTime(gen)
-        
     except Exception as e:
-        print(f"ERROR in caption generation: {str(e)}")
+        print(f"Unexpected error in caption generation: {str(e)}")
         print("Falling back to dummy captions...")
         try:
-            # Try to read the script from the audio filename (assuming it's in the same directory)
+            # Try to read the script from the audio filename
             script_file = os.path.splitext(audio_filename)[0] + ".txt"
             if os.path.exists(script_file):
                 with open(script_file, 'r', encoding='utf-8') as f:
