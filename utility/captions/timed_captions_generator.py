@@ -1,13 +1,50 @@
 import whisper_timestamped as whisper
 from whisper_timestamped import load_model, transcribe_timestamped
 import re
+import os
+import numpy as np
+import soundfile as sf
 
-def generate_timed_captions(audio_filename,model_size="base"):
-    WHISPER_MODEL = load_model(model_size)
-   
-    gen = transcribe_timestamped(WHISPER_MODEL, audio_filename, verbose=False, fp16=False)
-   
-    return getCaptionsWithTime(gen)
+def validate_audio_file(audio_filename):
+    """Validate that the audio file exists and is readable"""
+    if not os.path.exists(audio_filename):
+        raise FileNotFoundError(f"Audio file not found: {audio_filename}")
+    
+    try:
+        # Try to read the audio file
+        data, samplerate = sf.read(audio_filename)
+        if len(data) == 0:
+            raise ValueError("Audio file is empty")
+        return True
+    except Exception as e:
+        raise ValueError(f"Invalid audio file: {str(e)}")
+
+def generate_timed_captions(audio_filename, model_size="base"):
+    try:
+        # Validate audio file first
+        validate_audio_file(audio_filename)
+        
+        print(f"Loading Whisper model ({model_size})...")
+        WHISPER_MODEL = load_model(model_size)
+        
+        print("Transcribing audio...")
+        gen = transcribe_timestamped(
+            WHISPER_MODEL, 
+            audio_filename, 
+            verbose=True,  # Enable verbose output for debugging
+            fp16=False,    # Disable fp16 for better stability
+            language="en"  # Force English language
+        )
+        
+        if not gen or 'segments' not in gen:
+            raise ValueError("No transcription results returned")
+            
+        print("Processing transcription...")
+        return getCaptionsWithTime(gen)
+        
+    except Exception as e:
+        print(f"ERROR in caption generation: {str(e)}")
+        raise
 
 def splitWordsBySize(words, maxCaptionSize):
    
