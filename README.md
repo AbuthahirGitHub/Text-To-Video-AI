@@ -2,7 +2,7 @@
 
 Generate video from text using AI
 
-If you wish to add Text to Video into your application, here is an api to create video from text :- https://docs.vadoo.tv/docs/guide/create-an-ai-video
+If you wish to add Text to Video into your application, here is an api to create vide from text :- https://docs.vadoo.tv/docs/guide/create-an-ai-video
 
 ### Youtube Tutorial -> https://www.youtube.com/watch?v=AXo6VfRUgic
 
