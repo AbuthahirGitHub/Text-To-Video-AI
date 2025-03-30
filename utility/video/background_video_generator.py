@@ -11,7 +11,10 @@ if not PEXELS_API_KEY:
     print("WARNING: No Pexels API key found in environment variables (PEXELS_KEY)")
     print("Video search functionality will be limited")
 
-# Define a list of generic fallback search terms
+# Set this to False to disable generic fallback terms completely and only reuse successful videos
+USE_GENERIC_FALLBACKS = False
+
+# Define a list of generic fallback search terms (only used if USE_GENERIC_FALLBACKS is True)
 GENERIC_FALLBACK_TERMS = [
     "ocean",
     "sky",
@@ -219,7 +222,7 @@ def use_default_video():
 
 def generate_video_url(timed_video_searches, video_server):
     """
-    Generate video URLs for each time segment with improved error handling.
+    Generate video URLs for each time segment with improved error handling and video reuse.
     """
     timed_video_urls = []
     
@@ -242,16 +245,66 @@ def generate_video_url(timed_video_searches, video_server):
             # Add this segment with its URL (or None if not found)
             timed_video_urls.append([[t1, t2], url])
         
+        # Count how many segments found videos directly
+        direct_matches = sum(1 for _, url in timed_video_urls if url is not None)
+        total_segments = len(timed_video_urls)
+        print(f"Found direct video matches for {direct_matches}/{total_segments} segments ({direct_matches/total_segments*100:.1f}%)")
+        
         # Second pass: For segments with no video, reuse one of the successful videos
         if successful_videos:
+            reuse_count = 0
             for i, ((t1, t2), url) in enumerate(timed_video_urls):
                 if url is None:
                     # Choose a random video from our successful ones
                     reused_url = random.choice(successful_videos)
                     timed_video_urls[i] = [[t1, t2], reused_url]
                     print(f"Reusing existing video for segment {t1}-{t2}")
+                    reuse_count += 1
+            
+            print(f"Reused videos for {reuse_count}/{total_segments} segments")
         
-        # Final check: If we have no videos at all, use a default
+        # If USE_GENERIC_FALLBACKS is True and we still don't have enough videos, try generic terms
+        if USE_GENERIC_FALLBACKS and len(successful_videos) < len(timed_video_urls) / 2:
+            print("Using generic fallback terms to find additional videos...")
+            no_video_indices = [i for i, ((_, _), url) in enumerate(timed_video_urls) if url is None]
+            
+            if no_video_indices:
+                used_fallback_terms = []
+                
+                for i in no_video_indices:
+                    (t1, t2) = timed_video_urls[i][0]
+                    
+                    # Get a random term we haven't used yet
+                    available_terms = [term for term in GENERIC_FALLBACK_TERMS if term not in used_fallback_terms]
+                    if not available_terms:
+                        # If all terms are used, reset
+                        available_terms = GENERIC_FALLBACK_TERMS
+                        used_fallback_terms = []
+                    
+                    fallback_term = random.choice(available_terms)
+                    used_fallback_terms.append(fallback_term)
+                    
+                    # Try with the fallback term
+                    url = getBestVideo(fallback_term, orientation_landscape=True, used_vids=used_links)
+                    if url:
+                        used_links.append(url.split('.hd')[0])
+                        timed_video_urls[i] = [[t1, t2], url]
+                        print(f"Using generic fallback video for segment {t1}-{t2}: '{fallback_term}'")
+                        
+                        # Add this successful video to our list for potential reuse
+                        successful_videos.append(url)
+        
+        # Final pass: For any remaining segments without videos, reuse successful ones again
+        missing_segments = [i for i, ((_, _), url) in enumerate(timed_video_urls) if url is None]
+        if missing_segments and successful_videos:
+            print(f"Final pass: Reusing videos for {len(missing_segments)} remaining segments")
+            for i in missing_segments:
+                (t1, t2) = timed_video_urls[i][0]
+                reused_url = random.choice(successful_videos)
+                timed_video_urls[i] = [[t1, t2], reused_url]
+                print(f"Last resort: Reusing existing video for segment {t1}-{t2}")
+        
+        # Ultra-final pass: If absolutely nothing worked, use a default
         if not any(url for _, url in timed_video_urls):
             print("EMERGENCY FALLBACK: No videos found at all. Using default background.")
             default_url = use_default_video()

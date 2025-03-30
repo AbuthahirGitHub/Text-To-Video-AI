@@ -215,8 +215,20 @@ def main():
         # Render final video
         if background_video_urls is not None:
             print("\nRendering final video...")
-            video = get_output_media(SAMPLE_FILE_NAME, timed_captions, background_video_urls, VIDEO_SERVER)
-            print(f"\nVideo generated successfully: {OUTPUT_VIDEO_NAME}")
+            try:
+                output_path = get_output_media(SAMPLE_FILE_NAME, timed_captions, background_video_urls, VIDEO_SERVER)
+                if output_path:
+                    print(f"\nVideo generated successfully: {OUTPUT_VIDEO_NAME}")
+                else:
+                    print("\nError: Video rendering failed. Check the logs above for details.")
+            except KeyboardInterrupt:
+                print("\nVideo rendering was interrupted. This may be due to the process taking too long.")
+                print("Try running with fewer or shorter segments, or using the 'ultrafast' preset.")
+                return 1
+            except Exception as e:
+                print(f"\nError during video rendering: {str(e)}")
+                print("This could be due to memory limitations or issues with the downloaded videos.")
+                return 1
         else:
             print("\nError: Could not generate video due to missing background videos")
 
