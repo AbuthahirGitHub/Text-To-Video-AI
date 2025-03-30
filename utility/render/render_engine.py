@@ -19,12 +19,18 @@ else:
     print("No GPU detected. Using CPU for video rendering")
 
 def download_file(url, filename):
-    with open(filename, 'wb') as f:
-        headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers)
-        f.write(response.content)
+    try:
+        with open(filename, 'wb') as f:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()  # Raise an error for bad status codes
+            f.write(response.content)
+        return True
+    except Exception as e:
+        print(f"ERROR downloading video: {str(e)}")
+        return False
 
 def search_program(program_name):
     try: 
@@ -75,25 +81,43 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
                     video_filename = tempfile.NamedTemporaryFile(delete=False).name
                     print(f"Downloading video for segment {t1:.2f}-{t2:.2f}...")
                     
-                    download_file(video_url, video_filename)
+                    if not download_file(video_url, video_filename):
+                        print(f"Failed to download video for segment {t1:.2f}-{t2:.2f}, skipping")
+                        continue
+                        
                     downloaded_files.append(video_filename)
+                    
+                    # Validate video file before processing
+                    if not os.path.exists(video_filename) or os.path.getsize(video_filename) == 0:
+                        print(f"ERROR: Invalid video file for segment {t1:.2f}-{t2:.2f}, skipping")
+                        continue
                     
                     # Create VideoFileClip from the downloaded file
                     print(f"Creating clip for segment {t1:.2f}-{t2:.2f}...")
-                    video_clip = VideoFileClip(video_filename)
-                    
-                    # Handle videos that are shorter than needed
-                    if video_clip.duration < (t2 - t1):
-                        print(f"WARNING: Video is shorter than needed segment ({video_clip.duration}s < {t2-t1}s)")
-                        repeat = int((t2 - t1) / video_clip.duration) + 1
-                        video_clip = video_clip.loop(n=repeat)
-                    
-                    video_clip = video_clip.set_start(t1)
-                    video_clip = video_clip.set_end(t2)
-                    visual_clips.append(video_clip)
-                    
-                    # Clear memory after each clip
-                    del video_clip
+                    try:
+                        video_clip = VideoFileClip(video_filename)
+                        
+                        # Validate video clip
+                        if video_clip is None or video_clip.size is None:
+                            print(f"ERROR: Invalid video clip for segment {t1:.2f}-{t2:.2f}, skipping")
+                            continue
+                            
+                        # Handle videos that are shorter than needed
+                        if video_clip.duration < (t2 - t1):
+                            print(f"WARNING: Video is shorter than needed segment ({video_clip.duration}s < {t2-t1}s)")
+                            repeat = int((t2 - t1) / video_clip.duration) + 1
+                            video_clip = video_clip.loop(n=repeat)
+                        
+                        video_clip = video_clip.set_start(t1)
+                        video_clip = video_clip.set_end(t2)
+                        visual_clips.append(video_clip)
+                        
+                        # Clear memory after each clip
+                        del video_clip
+                        
+                    except Exception as e:
+                        print(f"ERROR creating video clip for segment {t1:.2f}-{t2:.2f}: {str(e)}")
+                        continue
                     
                 except Exception as e:
                     print(f"ERROR processing video segment {t1:.2f}-{t2:.2f}: {str(e)}")
