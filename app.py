@@ -78,26 +78,26 @@ def import_modules():
         modules_imported = False
     
     try:
-import whisper_timestamped as whisper
+        import whisper_timestamped as whisper
     except ImportError as e:
         print(f"WARNING: Could not import whisper_timestamped: {str(e)}")
         print("Caption generation might not work. Please run the setup.py script first.")
         modules_imported = False
     
     try:
-from utility.script.script_generator import generate_script
+        from utility.script.script_generator import generate_script
     except ImportError as e:
         print(f"WARNING: Could not import script_generator: {str(e)}")
         modules_imported = False
     
     try:
-from utility.audio.audio_generator import generate_audio
+        from utility.audio.audio_generator import generate_audio
     except ImportError as e:
         print(f"WARNING: Could not import audio_generator: {str(e)}")
         modules_imported = False
     
     try:
-from utility.captions.timed_captions_generator import generate_timed_captions
+        from utility.captions.timed_captions_generator import generate_timed_captions
     except ImportError as e:
         print(f"WARNING: Could not import timed_captions_generator: {str(e)}")
         modules_imported = False
@@ -109,7 +109,7 @@ from utility.captions.timed_captions_generator import generate_timed_captions
         modules_imported = False
     
     try:
-from utility.render.render_engine import get_output_media
+        from utility.render.render_engine import get_output_media
     except ImportError as e:
         print(f"WARNING: Could not import render_engine: {str(e)}")
         modules_imported = False
@@ -152,7 +152,7 @@ def main():
     parser.add_argument('--force-tpu', action='store_true', help='Force TPU usage (will error if not available)')
     
     try:
-    args = parser.parse_args()
+        args = parser.parse_args()
     except:
         # If there's a problem parsing arguments, print usage and exit
         parser.print_help()
@@ -197,7 +197,7 @@ def main():
 
         # Generate captions
         print("\nGenerating captions...")
-    timed_captions = generate_timed_captions(SAMPLE_FILE_NAME)
+        timed_captions = generate_timed_captions(SAMPLE_FILE_NAME)
         print("Captions generated successfully")
 
         # Generate video search terms
@@ -209,19 +209,19 @@ def main():
             print("No search terms generated")
 
         # Get background videos
-    background_video_urls = None
-    if search_terms is not None:
+        background_video_urls = None
+        if search_terms is not None:
             print("\nFetching background videos...")
-        background_video_urls = generate_video_url(search_terms, VIDEO_SERVER)
+            background_video_urls = generate_video_url(search_terms, VIDEO_SERVER)
             if background_video_urls:
                 print("Background videos fetched successfully")
-    else:
+        else:
             print("No background videos found")
 
-    background_video_urls = merge_empty_intervals(background_video_urls)
+        background_video_urls = merge_empty_intervals(background_video_urls)
 
         # Render final video
-    if background_video_urls is not None:
+        if background_video_urls is not None:
             print("\nRendering final video...")
             try:
                 # Clear memory before rendering
@@ -265,7 +265,7 @@ if __name__ == "__main__":
         if os.name == 'nt':
             temp_dir = os.environ.get('TEMP', 'C:\\Windows\\Temp')
             runtime_dir = os.path.join(temp_dir, 'runtime-dir')
-    else:
+        else:
             # Linux/Mac paths
             runtime_dir = '/tmp/runtime-dir'
             
