@@ -62,7 +62,7 @@ def search_videos(query_string, orientation_landscape=True):
     if not PEXELS_API_KEY:
         print(f"No Pexels API key provided. Cannot search for '{query_string}'")
         return empty_response
-    
+   
     url = "https://api.pexels.com/videos/search"
     headers = {
         "Authorization": PEXELS_API_KEY,
@@ -89,7 +89,7 @@ def search_videos(query_string, orientation_landscape=True):
         elif response.status_code != 200:
             print(f"ERROR: Pexels API returned status code {response.status_code}")
             return empty_response
-            
+        
         json_data = response.json()
         
         # Diagnostic info
@@ -103,7 +103,7 @@ def search_videos(query_string, orientation_landscape=True):
         log_response(LOG_TYPE_PEXEL, query_string, json_data)
         
         return json_data
-        
+
     except Exception as e:
         print(f"ERROR in Pexels API call for '{query_string}': {str(e)}")
         return empty_response
@@ -111,34 +111,19 @@ def search_videos(query_string, orientation_landscape=True):
 
 def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt=0):
     """
-    Get the best video for a search term with expanded fallback options.
+    Get the best video for a search term, without using generic fallback terms.
     """
-    # If we're on our fallback attempt, use a generic term instead
-    if attempt > 0:
-        # Select a random generic term that hasn't been used yet
-        available_fallbacks = [term for term in GENERIC_FALLBACK_TERMS if term not in used_vids]
-        if not available_fallbacks:
-            # If all fallbacks are used, reset and try again
-            available_fallbacks = GENERIC_FALLBACK_TERMS
-        
-        query_string = random.choice(available_fallbacks)
-        print(f"Using generic fallback video search: '{query_string}'")
-    
     # Search for videos
     try:
         vids = search_videos(query_string, orientation_landscape)
         
         # Verify videos exist in the response
         if 'videos' not in vids or not vids['videos']:
-            if attempt == 0:
-                # Try with a generic term instead
-                return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
-            else:
-                print(f"No videos found for fallback term: {query_string}")
-                return None
+            print(f"No videos found for '{query_string}'")
+            return None
                 
         videos = vids['videos']  # Extract the videos list from JSON
-        
+
         # Print detailed diagnostics about available videos
         if videos:
             print(f"Found {len(videos)} videos for '{query_string}'")
@@ -213,27 +198,13 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt
             if best_file and 'link' in best_file:
                 return best_file['link']
         
-        # If we get here, we couldn't find a usable video in this batch
-        if attempt == 0:
-            print(f"No usable videos found for '{query_string}', trying generic fallback")
-            return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
-        else:
-            print(f"No usable videos found for fallback term: {query_string}")
-            return None
+        # If we get here, we couldn't find a usable video for this term
+        print(f"No usable videos found for '{query_string}'")
+        return None
             
     except Exception as e:
         print(f"Error searching for videos: {str(e)}")
-        if attempt == 0:
-            # Try with a generic term instead
-            return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
-        else:
-            return None
-    
-    # If we get here and haven't tried fallback yet, try with a generic term
-    if attempt == 0:
-        return getBestVideo(query_string, orientation_landscape, used_vids, attempt=1)
-    
-    return None
+        return None
 
 
 def use_default_video():
@@ -280,43 +251,7 @@ def generate_video_url(timed_video_searches, video_server):
                     timed_video_urls[i] = [[t1, t2], reused_url]
                     print(f"Reusing existing video for segment {t1}-{t2}")
         
-        # Third pass: If we still have no videos at all, use generic fallbacks as last resort
-        if not successful_videos:
-            print("No videos found at all, using generic fallbacks")
-            used_fallback_terms = []
-            
-            for i, ((t1, t2), url) in enumerate(timed_video_urls):
-                # Get a random term we haven't used yet
-                available_terms = [term for term in GENERIC_FALLBACK_TERMS if term not in used_fallback_terms]
-                if not available_terms:
-                    # If all terms are used, reset
-                    available_terms = GENERIC_FALLBACK_TERMS
-                    used_fallback_terms = []
-                
-                fallback_term = random.choice(available_terms)
-                used_fallback_terms.append(fallback_term)
-                
-                # Try with lower resolution requirements
-                url = getBestVideo(fallback_term, orientation_landscape=True, used_vids=used_links)
-                if url:
-                    used_links.append(url.split('.hd')[0])
-                    timed_video_urls[i] = [[t1, t2], url]
-                    print(f"Using fallback video for segment {t1}-{t2}: '{fallback_term}'")
-                    
-                    # Add this successful video to our list for potential reuse
-                    successful_videos.append(url)
-        
-        # Final pass: For any remaining segments without videos, reuse successful ones
-        any_successful = any(url for _, url in timed_video_urls)
-        if any_successful:
-            valid_urls = [url for _, url in timed_video_urls if url]
-            for i, ((t1, t2), url) in enumerate(timed_video_urls):
-                if url is None and valid_urls:
-                    reused_url = random.choice(valid_urls)
-                    timed_video_urls[i] = [[t1, t2], reused_url]
-                    print(f"Last resort: Reusing existing video for segment {t1}-{t2}")
-        
-        # Ultra-final pass: If absolutely nothing worked, use a default
+        # Final check: If we have no videos at all, use a default
         if not any(url for _, url in timed_video_urls):
             print("EMERGENCY FALLBACK: No videos found at all. Using default background.")
             default_url = use_default_video()
