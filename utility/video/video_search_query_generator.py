@@ -21,7 +21,28 @@ def extract_keywords(text, captions):
     stop_words = {
         'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 
         'of', 'in', 'to', 'for', 'with', 'by', 'at', 'from', 'about', 
-        'as', 'that', 'this', 'these', 'those', 'it', 'its'
+        'as', 'that', 'this', 'these', 'those', 'it', 'its', 'have', 'has',
+        'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could',
+        'must', 'need', 'shall', 'may', 'might', 'can', 'cannot'
+    }
+    
+    # Visual context words to add
+    visual_context = {
+        'business': ['office', 'meeting', 'corporate'],
+        'technology': ['computer', 'digital', 'tech'],
+        'nature': ['landscape', 'outdoor', 'scenery'],
+        'people': ['crowd', 'group', 'people'],
+        'city': ['urban', 'cityscape', 'metropolitan'],
+        'food': ['cooking', 'restaurant', 'cuisine'],
+        'health': ['fitness', 'wellness', 'medical'],
+        'education': ['classroom', 'learning', 'education'],
+        'sports': ['sports', 'athletics', 'game'],
+        'music': ['concert', 'music', 'performance'],
+        'art': ['artwork', 'gallery', 'creative'],
+        'science': ['laboratory', 'research', 'science'],
+        'travel': ['travel', 'tourism', 'adventure'],
+        'fashion': ['fashion', 'style', 'clothing'],
+        'environment': ['environment', 'climate', 'sustainability']
     }
     
     # Go through each caption
@@ -36,14 +57,16 @@ def extract_keywords(text, captions):
         segment_keywords = filtered_words[:3]
         
         if segment_keywords:
-            # Add some visualization keywords
-            if 'space' in segment_keywords or 'universe' in segment_keywords:
-                segment_keywords = ['space', 'stars', 'galaxy']
-            elif 'animal' in segment_keywords or 'animals' in segment_keywords:
-                segment_keywords = ['animals', 'wildlife', 'nature']
-            elif 'ocean' in segment_keywords or 'sea' in segment_keywords:
-                segment_keywords = ['ocean', 'waves', 'underwater']
-                
+            # Add visual context based on keywords
+            for word in segment_keywords:
+                for context, related in visual_context.items():
+                    if word in context or context in word:
+                        segment_keywords.extend(related)
+                        break
+            
+            # Remove duplicates and limit to 3 keywords
+            segment_keywords = list(set(segment_keywords))[:3]
+            
             # Add this segment with timing and keywords
             keywords.append([time_range, segment_keywords])
     

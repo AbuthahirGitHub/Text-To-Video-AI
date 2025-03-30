@@ -335,7 +335,7 @@ def generate_video_url(search_terms, video_server):
                             continue
                         else:
                             print(f"Failed to fetch videos for '{term}': {str(e)}")
-                            break
+                        break
                             
         except Exception as e:
             print(f"Error processing term '{term}': {str(e)}")
