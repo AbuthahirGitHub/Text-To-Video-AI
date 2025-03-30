@@ -4,6 +4,9 @@ import random
 import time
 import json
 from utility.utils import log_response, LOG_TYPE_PEXEL
+import numpy as np
+import soundfile as sf
+import librosa
 
 # Check for Pexels API key
 PEXELS_API_KEY = os.environ.get('PEXELS_KEY')
@@ -420,3 +423,36 @@ def download_file(url, filename):
     except Exception as e:
         print(f"ERROR downloading video: {str(e)}")
         return False
+
+
+def preprocess_audio(audio_filename):
+    """
+    Preprocess audio file for Whisper model.
+    Returns preprocessed audio data or None if processing fails.
+    """
+    try:
+        # Check if file exists
+        if not os.path.exists(audio_filename):
+            raise FileNotFoundError(f"Audio file not found: {audio_filename}")
+        
+        # Load audio with librosa for better compatibility
+        audio_data, sample_rate = librosa.load(audio_filename, sr=16000, mono=True)
+        
+        # Validate audio data
+        if not isinstance(audio_data, np.ndarray):
+            raise ValueError("Invalid audio data format")
+        
+        # Ensure audio is not empty
+        if len(audio_data) == 0:
+            raise ValueError("Audio file is empty")
+        
+        # Normalize audio
+        max_val = np.max(np.abs(audio_data))
+        if max_val > 0:
+            audio_data = audio_data / max_val
+        
+        return audio_data
+        
+    except Exception as e:
+        print(f"Error preprocessing audio: {str(e)}")
+        return None
