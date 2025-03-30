@@ -377,3 +377,31 @@ def generate_video_url(search_terms, video_server):
             video_urls.append(((t1, t2), None))
     
     return video_urls
+
+
+def merge_empty_intervals(video_urls):
+    """
+    Merge empty intervals in the video URLs list by reusing the last non-empty video URL.
+    
+    Args:
+        video_urls (list): List of video URLs, where None represents empty intervals
+        
+    Returns:
+        list: List of video URLs with empty intervals filled by reusing the last non-empty URL
+    """
+    if not video_urls:
+        return []
+        
+    result = []
+    last_valid_url = None
+    
+    for url in video_urls:
+        if url is not None:
+            last_valid_url = url
+            result.append(url)
+        elif last_valid_url is not None:
+            result.append(last_valid_url)
+        else:
+            result.append(None)
+            
+    return result
