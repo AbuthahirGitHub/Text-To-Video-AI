@@ -139,7 +139,7 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt
     """Get the best video for a search term with improved search quality."""
     try:
         # Search for videos
-    vids = search_videos(query_string, orientation_landscape)
+        vids = search_videos(query_string, orientation_landscape)
         
         # Verify videos exist in the response
         if 'videos' not in vids or not vids['videos']:
