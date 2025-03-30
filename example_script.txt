@@ -1,0 +1,9 @@
+Welcome to this simplified version of Text-To-Video AI. 
+
+This tool converts your text into a video with matching visuals from Pexels. It works by analyzing your script for keywords, finding relevant videos, adding text-to-speech audio, and combining everything into a final video.
+
+The beautiful thing about nature is its endless variety. From majestic mountains to serene oceans, our planet offers stunning landscapes. Technology continues to evolve, allowing us to capture and share these wonders with others.
+
+In this example, you can see how different keywords trigger different visuals. Space and the universe contain countless stars and galaxies. Animals in the wild demonstrate nature's incredible diversity. Office environments showcase modern business settings.
+
+Thank you for trying this simplified version. You can create your own script files to generate videos about any topic you choose. 

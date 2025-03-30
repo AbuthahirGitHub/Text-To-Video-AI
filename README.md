@@ -1,49 +1,68 @@
 # Text To Video AI 🔥
 
-Generate video from text using AI
+Generate video from text using AI (Modified Version - No Script Generation)
 
-If you wish to add Text to Video into your application, here is an api to create video from text :- https://docs.vadoo.tv/docs/guide/create-an-ai-video
+This is a modified version of Text To Video AI that removes the AI script generation components. It focuses solely on converting your own text scripts into videos with matching visuals from Pexels.
 
-### Youtube Tutorial -> https://www.youtube.com/watch?v=AXo6VfRUgic
+## Features
 
-### Medium tutorial -> https://medium.com/@anilmatcha/text-to-video-ai-how-to-create-videos-for-free-a-complete-guide-a25c91de50b8
+- Converts your text into a video with matching visuals
+- Uses Pexels API to find relevant videos for your script
+- Adds synchronized text-to-speech audio
+- Includes captions
+- Optimized for performance with GPU support
 
-### Demo Video
+## Requirements
 
-https://github.com/user-attachments/assets/1e440ace-8560-4e12-850e-c532740711e7
+- Python 3.7+
+- Pexels API key
 
-### 🌟 Show Support
+## Setup
 
-If you enjoy using Text to Video AI, we'd appreciate your support with a star ⭐ on our repository. Your encouragement is invaluable and inspires us to continually improve and expand Text to Video AI. Thank you, and happy content creation! 🎉
-
-[![GitHub star chart](https://img.shields.io/github/stars/SamurAIGPT/Text-To-Video-AI?style=social)](https://github.com/SamurAIGPT/Text-To-Video-AI/stargazers)
-
-### Steps to run
-
-Run the following steps
+Run the following steps:
 
 ```
-export OPENAI_KEY="api-key"
-export PEXELS_KEY="pexels-key"
+export PEXELS_KEY="your-pexels-key"
 
-pip install -r requirements.text
+pip install -r requirements.txt
 
-python app.py "Topic name"
+python app.py --file "your_script.txt"
 ```
 
-Output will be generated in rendered_video.mp4
+Or, use the direct text option:
 
-### Quick Start
+```
+python app.py --text "Your script goes here. This is a simplified version that doesn't use AI for script generation."
+```
 
-Without going through the installation hastle here is a simple way to generate videos from text
+Output will be generated in `final_video.mp4`
 
-For a simple way to run the code, checkout the [colab link](/Text_to_Video_example.ipynb)
+## Quick Start
 
-To generate a video, just click on all the cells one by one. Setup your api keys for openai and pexels
+For a simple way to run the code, checkout the Google Colab notebook:
+
+1. Run `!python colab_setup.py` to set up the Colab environment
+2. Set your Pexels API key: `os.environ["PEXELS_KEY"]="your-pexels-key"`
+3. Run with your script: `!python app.py --file "/content/Text-To-Video-AI/test_script.txt"`
+
+## How It Works
+
+1. You provide the script text
+2. The system extracts keywords from your text
+3. It searches Pexels for matching videos
+4. It generates audio from your text using TTS
+5. It combines everything into a final video
+
+## Troubleshooting
+
+If no matching videos are found for a segment, the system will:
+1. Try alternative keywords from the same segment
+2. Use default videos if no matches are found
+3. Merge empty intervals with adjacent segments that have videos
 
 ## 💁 Contribution
 
-As an open-source project we are extremely open to contributions. To get started raise an issue in Github or create a pull request
+As an open-source project we are extremely open to contributions.
 
 ### Other useful Video AI Projects
 

@@ -248,15 +248,15 @@ if __name__ == "__main__":
         os.environ['XDG_RUNTIME_DIR'] = runtime_dir
         os.makedirs(runtime_dir, mode=0o700, exist_ok=True)
     except Exception as e:
-        print(f"Warning: Could not set up environment directories: {str(e)}")
+        print(f"Warning: Could not create runtime directory: {str(e)}")
+        print("Some audio operations might not work correctly.")
     
-    # Import modules now that dependencies are checked
-    modules_imported = import_modules()
-    if not modules_imported:
+    # Import modules
+    if not import_modules():
         print("\nSome modules could not be imported. Please run the setup script:")
         print("python setup.py  # For regular environments")
         print("python colab_setup.py  # For Google Colab")
         sys.exit(1)
     
-    # Exit with the main function's return code
+    # Run the main function
     sys.exit(main())
