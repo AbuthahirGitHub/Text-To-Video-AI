@@ -6,6 +6,10 @@ import argparse
 import json
 import asyncio
 
+# Define constants for file paths and services
+SAMPLE_FILE_NAME = "generated_audio.mp3"
+VIDEO_SERVER = "pexel"
+
 # Function to check and install missing packages
 def check_and_install_dependencies():
     required_packages = [
