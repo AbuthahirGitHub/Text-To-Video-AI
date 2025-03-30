@@ -42,26 +42,17 @@ GENERIC_FALLBACK_TERMS = [
 VIDEO_SEARCH_CACHE = {}
 
 def search_videos(query_string, orientation_landscape=True):
-    """
-    Search for videos using the Pexels API with caching and diagnostics.
-    
-    Args:
-        query_string: The search term to look for
-        orientation_landscape: Whether to search for landscape videos
-        
-    Returns:
-        dict: The API response JSON or a fallback empty response
-    """
+    """Search for videos using the Pexels API with proper error handling."""
     # Check cache first
     cache_key = f"{query_string}_{orientation_landscape}"
     if cache_key in VIDEO_SEARCH_CACHE:
         print(f"Using cached results for '{query_string}'")
         return VIDEO_SEARCH_CACHE[cache_key]
     
-    # Default empty response in case of errors
+    # Default empty response
     empty_response = {"videos": []}
     
-    # Check if we have an API key
+    # Check for API key
     if not PEXELS_API_KEY:
         print(f"No Pexels API key provided. Cannot search for '{query_string}'")
         return empty_response
@@ -69,47 +60,75 @@ def search_videos(query_string, orientation_landscape=True):
     url = "https://api.pexels.com/videos/search"
     headers = {
         "Authorization": PEXELS_API_KEY,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
     }
     params = {
         "query": query_string,
         "orientation": "landscape" if orientation_landscape else "portrait",
-        "per_page": 15
+        "per_page": 15,
+        "size": "large"
     }
 
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        
-        # Check for API errors
-        if response.status_code == 401:
-            print(f"ERROR: Unauthorized - Invalid Pexels API key")
-            return empty_response
-        elif response.status_code == 429:
-            print(f"ERROR: Rate limit exceeded for Pexels API")
-            # Sleep and try again with a reduced timeout
-            time.sleep(2)
-            response = requests.get(url, headers=headers, params=params, timeout=5)
-        elif response.status_code != 200:
-            print(f"ERROR: Pexels API returned status code {response.status_code}")
-            return empty_response
-        
-        json_data = response.json()
-        
-        # Diagnostic info
-        total_videos = len(json_data.get('videos', []))
-        print(f"Found {total_videos} videos for '{query_string}'")
-        
-        # Cache the result
-        VIDEO_SEARCH_CACHE[cache_key] = json_data
-        
-        # Log the response
-        log_response(LOG_TYPE_PEXEL, query_string, json_data)
-        
-        return json_data
+    max_retries = 3
+    retry_delay = 2
 
-    except Exception as e:
-        print(f"ERROR in Pexels API call for '{query_string}': {str(e)}")
-        return empty_response
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            
+            if response.status_code == 401:
+                print(f"ERROR: Unauthorized - Invalid Pexels API key")
+                return empty_response
+            elif response.status_code == 429:
+                if attempt < max_retries - 1:
+                    print(f"Rate limit hit, waiting {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                print(f"ERROR: Rate limit exceeded after {max_retries} attempts")
+                return empty_response
+            elif response.status_code != 200:
+                print(f"ERROR: Pexels API returned status code {response.status_code}")
+                return empty_response
+
+            data = response.json()
+            
+            if 'videos' not in data:
+                print(f"ERROR: Invalid response format from Pexels API")
+                return empty_response
+                
+            # Cache successful response
+            VIDEO_SEARCH_CACHE[cache_key] = data
+            
+            # Log response for debugging
+            log_response(LOG_TYPE_PEXEL, query_string, data)
+            
+            # Print video count and resolutions
+            videos = data.get('videos', [])
+            if videos:
+                resolutions = {}
+                for video in videos:
+                    for file in video.get('video_files', []):
+                        res = f"{file.get('width', '?')}x{file.get('height', '?')}"
+                        resolutions[res] = resolutions.get(res, 0) + 1
+                print(f"Found {len(videos)} videos for '{query_string}'")
+                print(f"Available resolutions: {resolutions}")
+            else:
+                print(f"No videos found for '{query_string}'")
+            
+            return data
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries - 1:
+                print(f"Request failed, retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            print(f"ERROR: Failed to connect to Pexels API after {max_retries} attempts: {str(e)}")
+            return empty_response
+
+    return empty_response
 
 
 def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt=0):
@@ -118,14 +137,14 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt
     """
     # Search for videos
     try:
-        vids = search_videos(query_string, orientation_landscape)
+    vids = search_videos(query_string, orientation_landscape)
         
         # Verify videos exist in the response
         if 'videos' not in vids or not vids['videos']:
             print(f"No videos found for '{query_string}'")
             return None
                 
-        videos = vids['videos']  # Extract the videos list from JSON
+    videos = vids['videos']  # Extract the videos list from JSON
 
         # Print detailed diagnostics about available videos
         if videos:
@@ -203,7 +222,7 @@ def getBestVideo(query_string, orientation_landscape=True, used_vids=[], attempt
         
         # If we get here, we couldn't find a usable video for this term
         print(f"No usable videos found for '{query_string}'")
-        return None
+    return None
             
     except Exception as e:
         print(f"Error searching for videos: {str(e)}")
@@ -220,98 +239,168 @@ def use_default_video():
     return "DEFAULT"
 
 
-def generate_video_url(timed_video_searches, video_server):
-    """
-    Generate video URLs for each time segment with improved error handling and video reuse.
-    """
-    timed_video_urls = []
+def generate_video_url(search_terms, video_server):
+    """Generate video URLs for each search term using Pexels API."""
+    if video_server != "pexel":
+        return None
     
-    if video_server == "pexel":
-        used_links = []
-        successful_videos = []  # Store successfully found videos
-        
-        # First pass: Try to find videos for each segment with its specific keywords
-        for (t1, t2), search_terms in timed_video_searches:
-            url = None
-            
-            # Try the specific search terms first
-            for query in search_terms:
-                url = getBestVideo(query, orientation_landscape=True, used_vids=used_links)
-                if url:
-                    used_links.append(url.split('.hd')[0])
-                    successful_videos.append(url)  # Store successful videos
-                    break
-            
-            # Add this segment with its URL (or None if not found)
-            timed_video_urls.append([[t1, t2], url])
-        
-        # Count how many segments found videos directly
-        direct_matches = sum(1 for _, url in timed_video_urls if url is not None)
-        total_segments = len(timed_video_urls)
-        print(f"Found direct video matches for {direct_matches}/{total_segments} segments ({direct_matches/total_segments*100:.1f}%)")
-        
-        # Second pass: For segments with no video, reuse one of the successful videos
-        if successful_videos:
-            reuse_count = 0
-            for i, ((t1, t2), url) in enumerate(timed_video_urls):
-                if url is None:
-                    # Choose a random video from our successful ones
-                    reused_url = random.choice(successful_videos)
-                    timed_video_urls[i] = [[t1, t2], reused_url]
-                    print(f"Reusing existing video for segment {t1}-{t2}")
-                    reuse_count += 1
-            
-            print(f"Reused videos for {reuse_count}/{total_segments} segments")
-        
-        # If USE_GENERIC_FALLBACKS is True and we still don't have enough videos, try generic terms
-        if USE_GENERIC_FALLBACKS and len(successful_videos) < len(timed_video_urls) / 2:
-            print("Using generic fallback terms to find additional videos...")
-            no_video_indices = [i for i, ((_, _), url) in enumerate(timed_video_urls) if url is None]
-            
-            if no_video_indices:
-                used_fallback_terms = []
+    # Check for Pexels API key
+    pexels_key = os.getenv('PEXELS_KEY')
+    if not pexels_key:
+        print("WARNING: PEXELS_KEY environment variable not set. Video search may fail.")
+        return None
+    
+    # Initialize cache
+    video_cache = {}
+    successful_videos = {}  # Track successful video matches
+    
+    # First pass: Try to find videos for each term
+    print("\nFirst pass: Searching for videos...")
+    direct_matches = 0
+    total_segments = len(search_terms)
+    
+    for i, ((t1, t2), term) in enumerate(search_terms):
+        try:
+            # Skip if we already have a successful video for this term
+            if term in successful_videos:
+                continue
                 
-                for i in no_video_indices:
-                    (t1, t2) = timed_video_urls[i][0]
-                    
-                    # Get a random term we haven't used yet
-                    available_terms = [term for term in GENERIC_FALLBACK_TERMS if term not in used_fallback_terms]
-                    if not available_terms:
-                        # If all terms are used, reset
-                        available_terms = GENERIC_FALLBACK_TERMS
-                        used_fallback_terms = []
-                    
-                    fallback_term = random.choice(available_terms)
-                    used_fallback_terms.append(fallback_term)
-                    
-                    # Try with the fallback term
-                    url = getBestVideo(fallback_term, orientation_landscape=True, used_vids=used_links)
-                    if url:
-                        used_links.append(url.split('.hd')[0])
-                        timed_video_urls[i] = [[t1, t2], url]
-                        print(f"Using generic fallback video for segment {t1}-{t2}: '{fallback_term}'")
+            # Check cache first
+            if term in video_cache:
+                print(f"Using cached results for '{term}'")
+                videos = video_cache[term]
+            else:
+                # Add delay between API calls to avoid rate limits
+                time.sleep(0.5)  # 500ms delay between requests
+                
+                # Make API request with retries
+                max_retries = 3
+                retry_delay = 2  # seconds
+                
+                for attempt in range(max_retries):
+                    try:
+                        headers = {
+                            "Authorization": pexels_key,
+                            "Accept": "application/json"
+                        }
+                        response = requests.get(
+                            f"https://api.pexels.com/videos/search?query={term}&per_page=15",
+                            headers=headers,
+                            timeout=10
+                        )
                         
-                        # Add this successful video to our list for potential reuse
-                        successful_videos.append(url)
-        
-        # Final pass: For any remaining segments without videos, reuse successful ones again
-        missing_segments = [i for i, ((_, _), url) in enumerate(timed_video_urls) if url is None]
-        if missing_segments and successful_videos:
-            print(f"Final pass: Reusing videos for {len(missing_segments)} remaining segments")
-            for i in missing_segments:
-                (t1, t2) = timed_video_urls[i][0]
-                reused_url = random.choice(successful_videos)
-                timed_video_urls[i] = [[t1, t2], reused_url]
-                print(f"Last resort: Reusing existing video for segment {t1}-{t2}")
-        
-        # Ultra-final pass: If absolutely nothing worked, use a default
-        if not any(url for _, url in timed_video_urls):
-            print("EMERGENCY FALLBACK: No videos found at all. Using default background.")
-            default_url = use_default_video()
-            for i in range(len(timed_video_urls)):
-                timed_video_urls[i][1] = default_url
+                        if response.status_code == 429:  # Rate limit
+                            if attempt < max_retries - 1:
+                                print(f"Rate limit hit for '{term}', retrying in {retry_delay} seconds...")
+                                time.sleep(retry_delay)
+                                retry_delay *= 2  # Exponential backoff
+                                continue
+                            else:
+                                print(f"Rate limit exceeded for '{term}' after {max_retries} attempts")
+                                break
+                                
+                        response.raise_for_status()
+                        data = response.json()
+                        
+                        if not data.get('videos'):
+                            print(f"No videos found for '{term}'")
+                            break
+                            
+                        videos = data['videos']
+                        video_cache[term] = videos
+                        
+                        # Print available resolutions for debugging
+                        resolutions = {}
+                        for video in videos:
+                            for file in video.get('video_files', []):
+                                res = f"{file.get('width', '?')}x{file.get('height', '?')}"
+                                resolutions[res] = resolutions.get(res, 0) + 1
+                        print(f"Found {len(videos)} videos for '{term}'")
+                        print(f"Available resolutions for '{term}': {resolutions}")
+                        
+                        # Try to find a suitable video
+                        video_url = None
+                        for video in videos:
+                            for file in video.get('video_files', []):
+                                # First try exact 1920x1080 match
+                                if file.get('width') == 1920 and file.get('height') == 1080:
+                                    video_url = file.get('link')
+                                    break
+                            if video_url:
+                                break
+                                
+                        # If no exact match, try flexible resolution
+                        if not video_url:
+                            for video in videos:
+                                for file in video.get('video_files', []):
+                                    width = file.get('width', 0)
+                                    height = file.get('height', 0)
+                                    if width >= 1280 and height >= 720:
+                                        video_url = file.get('link')
+                                        break
+                                if video_url:
+                                    break
+                                    
+                        # If still no match, use highest quality available
+                        if not video_url and videos:
+                            best_quality = max(
+                                videos[0].get('video_files', []),
+                                key=lambda x: (x.get('width', 0) * x.get('height', 0))
+                            )
+                            video_url = best_quality.get('link')
+                        
+                        if video_url:
+                            successful_videos[term] = video_url
+                            direct_matches += 1
+                            break
+                            
+                    except requests.exceptions.RequestException as e:
+                        if attempt < max_retries - 1:
+                            print(f"Request failed for '{term}', retrying in {retry_delay} seconds...")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2
+                            continue
+                        else:
+                            print(f"Failed to fetch videos for '{term}': {str(e)}")
+                            break
+                            
+        except Exception as e:
+            print(f"Error processing term '{term}': {str(e)}")
+            continue
+    
+    # Report direct match statistics
+    print(f"\nFound direct video matches for {direct_matches}/{total_segments} segments ({direct_matches/total_segments*100:.1f}%)")
+    
+    # Second pass: Reuse successful videos for segments without matches
+    print("\nSecond pass: Reusing successful videos...")
+    reuse_count = 0
+    
+    for i, ((t1, t2), term) in enumerate(search_terms):
+        if term not in successful_videos:
+            # Find the most similar successful term
+            best_match = None
+            best_similarity = 0
             
-    elif video_server == "stable_diffusion":
-        timed_video_urls = get_images_for_video(timed_video_searches)
-
-    return timed_video_urls
+            for successful_term in successful_videos:
+                similarity = len(set(term.split()) & set(successful_term.split())) / len(set(term.split()) | set(successful_term.split()))
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_match = successful_term
+            
+            if best_match and best_similarity > 0.3:  # Only reuse if there's significant similarity
+                successful_videos[term] = successful_videos[best_match]
+                reuse_count += 1
+                print(f"Reusing existing video for segment {t1:.2f}-{t2:.2f}")
+    
+    print(f"\nReused videos for {reuse_count}/{total_segments} segments")
+    
+    # Create final video URL list
+    video_urls = []
+    for (t1, t2), term in search_terms:
+        if term in successful_videos:
+            video_urls.append(((t1, t2), successful_videos[term]))
+        else:
+            print(f"WARNING: No video found for term '{term}'")
+            video_urls.append(((t1, t2), None))
+    
+    return video_urls

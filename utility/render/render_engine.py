@@ -9,6 +9,14 @@ from moviepy.editor import (AudioFileClip, CompositeVideoClip, CompositeAudioCli
 from moviepy.audio.fx.audio_loop import audio_loop
 from moviepy.audio.fx.audio_normalize import audio_normalize
 import requests
+import torch
+
+# Check for GPU availability
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+if DEVICE == "cuda":
+    print("GPU detected! Using CUDA acceleration for video rendering")
+else:
+    print("No GPU detected. Using CPU for video rendering")
 
 def download_file(url, filename):
     with open(filename, 'wb') as f:
@@ -135,7 +143,6 @@ def get_output_media(audio_file_path, timed_captions, background_video_data, vid
         
         # Use GPU acceleration if available
         try:
-            import torch
             if torch.cuda.is_available():
                 print("GPU acceleration enabled for video rendering")
                 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
