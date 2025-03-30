@@ -130,6 +130,20 @@ def read_script_file(file_path):
     except Exception as e:
         raise ValueError(f"Error reading script file: {str(e)}")
 
+def create_dummy_background(duration=10.0, output_file="dummy_background.mp4"):
+    """Create a simple dummy background video when no videos are found"""
+    try:
+        from moviepy.editor import ColorClip
+        
+        # Create a simple color background
+        color_clip = ColorClip(size=(1920, 1080), color=(0, 0, 0), duration=duration)
+        color_clip.write_videofile(output_file, fps=24)
+        print(f"Created dummy background video: {output_file}")
+        return output_file
+    except Exception as e:
+        print(f"Failed to create dummy background: {str(e)}")
+        return None
+
 def main():
     parser = argparse.ArgumentParser(description="Generate a video from a script.")
     
@@ -209,19 +223,46 @@ def main():
                 print("Background videos fetched successfully")
             else:
                 print("No background videos found")
+        
+        # If no background videos found or processing failed, create a dummy background
+        if not background_video_urls or all(url is None for _, url in background_video_urls):
+            print("\nWarning: No suitable background videos were found.")
+            print("Creating a simple black background video instead...")
+            
+            # Calculate total duration from captions
+            total_duration = 10.0  # Default duration
+            if timed_captions and len(timed_captions) > 0:
+                total_duration = timed_captions[-1][0][1] + 1.0  # Add a second buffer
+            
+            # Create a dummy background video
+            dummy_video = create_dummy_background(duration=total_duration)
+            
+            # Create a simple background video url structure
+            if dummy_video:
+                background_video_urls = [[[0, total_duration], dummy_video]]
+                print("Using dummy background for the video")
 
+        # Remove any segments with no video (None values)
+        if background_video_urls:
+            background_video_urls = [item for item in background_video_urls if item[1] is not None]
+            
         background_video_urls = merge_empty_intervals(background_video_urls)
 
         # Render final video
-        if background_video_urls is not None:
+        if background_video_urls:
             print("\nRendering final video...")
             video = get_output_media(SAMPLE_FILE_NAME, timed_captions, background_video_urls, VIDEO_SERVER)
             print(f"\nVideo generated successfully: {OUTPUT_VIDEO_NAME}")
         else:
-            print("\nError: Could not generate video due to missing background videos")
+            print("\nError: Could not generate video due to missing background videos.")
+            print("Please try again with a different script or set a Pexels API key.")
+            print("You can get a free Pexels API key at: https://www.pexels.com/api/")
+            return 1
 
     except Exception as e:
         print(f"\nError: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return 1
 
     return 0
