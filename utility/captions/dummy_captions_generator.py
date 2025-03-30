@@ -2,38 +2,78 @@
 Dummy captions generator for environments where audio processing fails.
 """
 
-def generate_dummy_captions(script, audio_file, duration=30.0):
+import os
+import re
+import random
+
+def generate_dummy_captions(script_text, audio_filename=None, duration=30.0):
     """
-    Generate dummy timed captions from a script when audio processing fails.
+    Generate dummy timed captions when actual transcription fails.
+    This provides fallback timing information based on a script.
     
     Args:
-        script (str): The script text
-        audio_file (str): The audio file path (ignored in this implementation)
-        duration (float): The total duration to spread captions across
+        script_text (str): The script text to split into segments
+        audio_filename (str, optional): Path to the audio file (for duration estimation)
+        duration (float, optional): Default duration if audio file can't be read
         
     Returns:
-        list: A list of timed caption segments in the format [[time_start, time_end], "caption text"]
+        list: List of timed captions in the format [[(start_time, end_time), text], ...]
     """
+    print("Generating dummy captions as fallback...")
+    
+    # Try to get duration from audio file if available
+    if audio_filename and os.path.exists(audio_filename):
+        try:
+            import soundfile as sf
+            audio_data, samplerate = sf.read(audio_filename)
+            duration = len(audio_data) / samplerate
+            print(f"Using audio duration: {duration:.2f} seconds")
+        except Exception as e:
+            print(f"Could not read audio duration: {e}")
+            print(f"Using default duration: {duration} seconds")
+    
+    # Clean up script text
+    if not script_text or not isinstance(script_text, str):
+        script_text = "Placeholder text for dummy captions."
+    
     # Split the script into sentences
-    import re
-    sentences = re.split(r'(?<=[.!?])\s+', script)
+    sentences = re.split(r'(?<=[.!?])\s+', script_text.strip())
     sentences = [s.strip() for s in sentences if s.strip()]
     
+    # If no sentences found, create a dummy sentence
     if not sentences:
-        # If no sentences, create a dummy one
-        sentences = ["No captions available."]
+        sentences = ["This is a dummy caption for the video."]
     
-    # Calculate time per sentence
-    time_per_sentence = duration / len(sentences)
+    # Calculate timing based on sentence count and duration
+    segment_count = len(sentences)
+    segment_duration = duration / segment_count
     
-    # Create timed captions
-    timed_captions = []
-    for i, sentence in enumerate(sentences):
-        start_time = i * time_per_sentence
-        end_time = (i + 1) * time_per_sentence
-        timed_captions.append([[start_time, end_time], sentence])
+    # Generate timed captions
+    captions = []
+    current_time = 0.0
     
-    return timed_captions
+    for sentence in sentences:
+        # Vary sentence duration slightly to make it more natural
+        # (between 80% and 120% of average)
+        variation = random.uniform(0.8, 1.2)
+        sentence_duration = segment_duration * variation
+        
+        # Ensure we don't exceed total duration
+        if current_time + sentence_duration > duration:
+            sentence_duration = duration - current_time
+        
+        # Only add if we have a positive duration
+        if sentence_duration > 0:
+            end_time = current_time + sentence_duration
+            captions.append([(current_time, end_time), sentence])
+            current_time = end_time
+        
+        # Stop if we've reached the total duration
+        if current_time >= duration:
+            break
+    
+    print(f"Generated {len(captions)} dummy caption segments")
+    return captions
 
 def generate_timed_captions(audio_file):
     """
@@ -49,4 +89,12 @@ def generate_timed_captions(audio_file):
     This is used when audio processing fails or is not available.
     """
     
-    return generate_dummy_captions(dummy_script, audio_file, duration=10.0) 
+    return generate_dummy_captions(dummy_script, audio_file, duration=10.0)
+
+# For testing
+if __name__ == "__main__":
+    test_script = "This is a test script. It has multiple sentences. We're testing the dummy caption generator."
+    captions = generate_dummy_captions(test_script, duration=10.0)
+    
+    for (start, end), text in captions:
+        print(f"{start:.2f} - {end:.2f}: {text}") 
