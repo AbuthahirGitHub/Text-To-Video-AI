@@ -12,7 +12,8 @@ def check_and_install_dependencies():
         "edge_tts",
         "whisper_timestamped",
         "torch",
-        "numpy"
+        "numpy",
+        "moviepy"
     ]
     
     for package in required_packages:
@@ -63,17 +64,62 @@ def detect_hardware():
 
 # Now import the remaining modules after dependency check
 def import_modules():
-    global edge_tts, whisper, generate_script, generate_audio, generate_timed_captions
+    global edge_tts, whisper, generate_audio, generate_timed_captions
     global generate_video_url, get_output_media, getVideoSearchQueriesTimed, merge_empty_intervals
     
-    import edge_tts
-    import whisper_timestamped as whisper
-    from utility.script.script_generator import generate_script
-    from utility.audio.audio_generator import generate_audio
-    from utility.captions.timed_captions_generator import generate_timed_captions
-    from utility.video.background_video_generator import generate_video_url
-    from utility.render.render_engine import get_output_media
-    from utility.video.video_search_query_generator import getVideoSearchQueriesTimed, merge_empty_intervals
+    modules_imported = True
+    
+    # Try importing each module separately with error handling
+    try:
+        import edge_tts
+    except ImportError as e:
+        print(f"WARNING: Could not import edge_tts: {str(e)}")
+        print("Audio generation might not work. Please run the setup.py script first.")
+        modules_imported = False
+    
+    try:
+        import whisper_timestamped as whisper
+    except ImportError as e:
+        print(f"WARNING: Could not import whisper_timestamped: {str(e)}")
+        print("Caption generation might not work. Please run the setup.py script first.")
+        modules_imported = False
+    
+    try:
+        from utility.audio.audio_generator import generate_audio
+    except ImportError as e:
+        print(f"WARNING: Could not import audio_generator: {str(e)}")
+        modules_imported = False
+    
+    try:
+        from utility.captions.timed_captions_generator import generate_timed_captions
+    except ImportError as e:
+        print(f"WARNING: Could not import timed_captions_generator: {str(e)}")
+        try:
+            # Try to import the dummy captions generator instead
+            from utility.captions.dummy_captions_generator import generate_timed_captions
+            print("Using dummy captions generator as fallback")
+        except ImportError:
+            modules_imported = False
+    
+    try:
+        from utility.video.background_video_generator import generate_video_url
+    except ImportError as e:
+        print(f"WARNING: Could not import background_video_generator: {str(e)}")
+        modules_imported = False
+    
+    try:
+        from utility.render.render_engine import get_output_media
+    except ImportError as e:
+        print(f"WARNING: Could not import render_engine: {str(e)}")
+        modules_imported = False
+    
+    try:
+        from utility.video.video_search_query_generator import getVideoSearchQueriesTimed, merge_empty_intervals
+    except ImportError as e:
+        print(f"WARNING: Could not import video_search_query_generator: {str(e)}")
+        modules_imported = False
+    
+    return modules_imported
 
 def read_script_file(file_path):
     """Read script from a file."""
@@ -123,11 +169,8 @@ def main():
     OUTPUT_VIDEO_NAME = "final_video.mp4"
 
     try:
-        # Get script content either from direct text or file
-        script_content = read_script_file(args.file) if args.file else args.text
-        
-        # Process the input script
-        script = generate_script(script_content)
+        # Get script content directly from text or file
+        script = read_script_file(args.file) if args.file else args.text
         print("Script to be used:")
         print(script)
         print("\nGenerating audio...")
@@ -204,7 +247,12 @@ if __name__ == "__main__":
         print(f"Warning: Could not set up environment directories: {str(e)}")
     
     # Import modules now that dependencies are checked
-    import_modules()
+    modules_imported = import_modules()
+    if not modules_imported:
+        print("\nSome modules could not be imported. Please run the setup script:")
+        print("python setup.py  # For regular environments")
+        print("python colab_setup.py  # For Google Colab")
+        sys.exit(1)
     
     # Exit with the main function's return code
     sys.exit(main())
